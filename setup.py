@@ -7,6 +7,7 @@ link_grammar = Extension("linkGrammar",
 
 setup(name = "linkGrammar",
       version = "1.0",
+      author = 'Alex Toney',
       ext_modules = [link_grammar]
       )
       

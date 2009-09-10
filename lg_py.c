@@ -2,7 +2,7 @@
 #include <locale.h>
 #include "link-includes.h"
 
-
+/// This is the basic sentence dissection
 static PyObject *sentence(PyObject *self, PyObject *args){
     Dictionary    dict;
     Parse_Options opts;
