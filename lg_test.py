@@ -4,6 +4,7 @@ import linkGrammar
 from fsm import FSM
 import lg_fsm as lgFSM
 
+import itertools
 #from nltk.sem import logic
 
 
@@ -62,7 +63,9 @@ class grammarFSM:
         self.fsm.process_list(input)
 
 class Grammar:
-    pass
+    def __init__(self):
+        self.g = grammarFSM()
+        self.g.fsm_setup()
 
 
 
@@ -161,35 +164,80 @@ def relation((words, lengths, links)):
         i += 1
 
 
+def r_Const(const, input='', current=[]):
+    #r_filter = lambda y: filter(lambda x: isinstance(x, list), y)
+    #rmap = lambda y: map(lambda x:r_Const(x), y)
+    #r_map = map(rmap, const)
+    #print r_map
+    #r2_map = map(lambda x: r_Const(x), r_map)
+    for x in const:
+        if isinstance(x, list):
+            current.insert(0, len(x))
+            output = r_Const(x, input, current)
+            print output
+        else:
+            input += '('
+            input += x
+
+            cur = current.pop(0)
+            cur -= 1
+            
+            if cur == 0:
+                input += ')'
+            else:
+                current.insert(0, cur)
+         
+    for y in current:
+        for z in xrange(y):
+            input += ')'
+            
+    print input
+    return input
+    #if r_map:
+    #    r_Const(r_map)
+    
+def const_analysis(const):
+    r_Const(const)
+
+    
+
+
 g = grammarFSM()
 g.fsm_setup()
-v = linkGrammar.sentence("It's very hard to describe")
-pprint.pprint(v)
-#draw_text(v)
-#print g.fsm_run(v[3])
-#print 'sentence 1:'
-#relation(v)
 
-j = linkGrammar.sentence("how are you?")
-print linkGrammar.constituents("how are you?")
-#print linkGrammar.domains("how are you?")
+
+
+v = linkGrammar.constituents("It's very hard to describe")
+s = linkGrammar.sentence("It's very hard to describe")
+print const_analysis(v)
+#pprint.pprint(v)
+print g.fsm_run(s[3])
+
+#j = linkGrammar.sentence("how are you?")
+c = linkGrammar.constituents("how are you?")
+s = linkGrammar.sentence("how are you?")
+const_analysis(c)
+print g.fsm_run(s[3])
+
+
 
 #draw_text(j)
-print 'sentence 2,',
-pprint.pprint(j)
+#print 'sentence 2,',
+#pprint.pprint(j)
 #relation(j)
 #g = grammarFSM()
 #g.fsm_setup()
 #print g.fsm_run(j[3])
 #map_out(j)
 
-j = linkGrammar.sentence("chomsky, find me cookies.")
-print linkGrammar.constituents("chomsky, find me cookies.")
+#j = linkGrammar.sentence("chomsky, find me cookies.")
+#const = linkGrammar.constituents("chomsky, find me cookies.")
+#cleanPrint(const)
 #print linkGrammar.domains("chomsky, find me cookies.")
 
 #draw_text(j)
-print 'sentence 3,',
-pprint.pprint(j)
+#print 'sentence 3,',
+#pprint.pprint(j)
 #g = grammarFSM()
 #g.fsm_setup()
 #print g.fsm_run(j[3])
