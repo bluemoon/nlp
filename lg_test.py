@@ -82,13 +82,9 @@ class Grammar:
         ### and one for graphing
         self.G = nx.Graph()
         
-    #def flatten(self, List):
-    #    if isinstance(List, list):
-    #        return map(self.flatten, List)
-    #    else:
-    #        return List
-
     def flatten(self, List):
+        ### take a list of varied depth
+        ### and flatten it! with no recursion
         return reduce(list.__add__, map(lambda x: list(x), [y for y in List]))
 
     def subtree_indices(self, tree_rep):
@@ -115,22 +111,10 @@ class Grammar:
             return max(c_max_depth)
         
     def sentence_to_Tree(self, sentence, cur_node=1):
-        #G = nx.Graph()
-        #colors = range(len(sentence )*2)
         for x in sentence[2]:
             self.s_Tree.insert_onto_master(cur_node, data=[x[0], x[1]])
-            #G.add_nodes_from([x[0],x[1]])
-            #G.add_edge(sentence[2][cur_node-1][0], sentence[2][cur_node-1][1])
-            #G.add_edge(sentence[2][cur_node-2][1], sentence[2][cur_node-1][0])
-            
             cur_node += 1
-            
-        #self.s_Tree.printTree(self.s_root)
-        #pos = nx.graphviz_layout(G,prog='twopi',args='')
-        #nx.draw(G, pos, node_color='#A0CBE2', width=1.25, edge_cmap=plt.cm.Blues)
-        #plt.axis('off')
-        #plt.savefig("tree_structure.png")
-        #plt.show()
+
         
     def constituent_to_Tree(self, sentence, constituent, consti_depths, cur_node_id=1, last_node=None, depth=0, last_depth=0):
         x_const_len = 0
@@ -138,13 +122,8 @@ class Grammar:
         last_node_  = None
         
         flat_depths = self.flatten(consti)
-        #print 'flat: %s' % flat_depths
-        #print 'depth: %s' % consti_depths[cur_node_id-1]
-        #print 'const: %s' % constituent
         for x_const in constituent:
             x_const_len = len(x_const)
-            #print 'r_depth: %d' % r_depth
-            #print 'cur_node: %d' % cur_node_id
             
             if isinstance(x_const, list):
                 if len(x_const) >= 1:
@@ -154,11 +133,8 @@ class Grammar:
                 
             else:
                 left, right = sentence[2][cur_node_id]
-                data = [sentence[0][cur_node_id]]#, left, right, sentence[1][cur_node_id]]
+                data = sentence[0][cur_node_id]#, left, right, sentence[1][cur_node_id]]
                 word = sentence[0][cur_node_id]
-                #self.G.add_node(x_const)
-                #self.G.add_edge(x_const, right)
-                
 
                 hasList = False
                 
@@ -170,10 +146,9 @@ class Grammar:
                 
                 if not last_node:
                     last_node_ = self.c_Tree.insert_onto_master(cur_node_id, data)
-                    #self.G.add_edge(sentence[0][cur_node_id-1], word)
+
                 else:
                     last_node_ = self.c_Tree.insert(last_node, cur_node_id, data)
-                    #self.G.add_edge(sentence[0][cur_node_id-1], word)
                     
                 if not hasList:
                     r_depth -= 1
@@ -183,18 +158,11 @@ class Grammar:
 
 
             cur_node_id += 1
-            
-        
-        #pos = nx.spring_layout(self.G)
-        #nx.draw(self.G, node_color='#A0CBE2', width=1.2, edge_cmap=plt.cm.Blues)
-        #plt.savefig("c_tree_structure.png")
-        #plt.show()   
+             
         return self.c_Tree
     
     def cTreePrint(self):
-        #self.c_Tree.printTree(self.c_root)
-        #pprint.pprint(self.c_root.__dict__['right'])
-        #print self.c_Tree.getMasterNode().master_tail
+        self.c_Tree.pp_children(self.c_Tree.getMasterNode())
         for nodes in self.c_Tree.getMasterNode().master_tail:
             print r.children(nodes)
         
@@ -244,6 +212,9 @@ class R_Tree:
         if hasattr(root_node, '__class__'):
             if root_node.__class__.__name__ == 'masterNode':
                 for x in root_node.master_tail:
+                    ###  coming from the HEAD these will be less
+                    ###  significant
+                    G.add_weighted_edges_from([('HEAD', x, 0.25)])
                     nodes.appendleft(x)
                     while nodes:
                         current = nodes.popleft()
@@ -251,17 +222,15 @@ class R_Tree:
                             continue
                         if hasattr(current, 'right_tail'):
                             if current.right_tail:
-                                G.add_edge(current, current.right_tail)
+                                G.add_weighted_edges_from([(current, current.right_tail, 0.50)])
                                 
-                            ###print 'c: %s' % current
-                            ###print 'c_tail: %s' % current.right_tail
                             nodes.appendleft(current.right_tail)
                         if hasattr(current, 'left_tail'):
                             nodes.appendleft(current.left_tail)
                         
                         visited.append(current)
                         if visited[graph_itr-2] != current and current != None and visited[graph_itr-2] != None:
-                            G.add_edge(visited[graph_itr-2], current)
+                            G.add_weighted_edges_from([(visited[graph_itr-2], current, 0.5)])
                         elif current != None:
                             G.add_node(current)
                             
@@ -304,9 +273,12 @@ class R_Tree:
 
         p = nx.single_source_shortest_path_length(G, ncenter)
         l = filter(lambda x: x > 1, p.values())
-        # nodes
-        nx.draw_networkx_nodes(G, pos, node_size=1000, node_color="#A0CBE2", edge_cmap=plt.cm.Blues)
-        nx.draw_networkx_edges(G, pos, width=1.2, alpha=0.5, edge_color='b', style='dashed')
+
+        ### draw up the nodes
+        nx.draw_networkx_nodes(G, pos, node_size=1000,
+                               node_color="#A0CBE2", edge_cmap=plt.cm.Blues)
+        nx.draw_networkx_edges(G, pos, width=1.2, alpha=0.5,
+                               edge_color='b', style='dashed')
         nx.draw_networkx_labels(G,pos,font_size=7, font_family='sans-serif')
         #nx.draw(G, pos, node_color='#A0CBE2', width=1.2, edge_cmap=plt.cm.Blues)
 
@@ -321,7 +293,6 @@ class R_Tree:
         tail_length = len(self.master.master_tail)
         if tail_length > 1:
             rightTail = self.master.master_tail[tail_length-2]
-            #print 'ontoMaster:', rightTail
             if hasattr(rightTail, 'right_tail'):
                 if not rightTail.right_tail:
                     rightTail.right_tail = node
@@ -335,10 +306,12 @@ class R_Tree:
             if node_id <= root_node.node_id:
                 ###  if the data is less than the stored one
                 ###  goes into the left-sub-tree
-                root_node.left_tail = self.insert(root_node.left_tail, node_id, data, new=True)
+                root_node.left_tail = self.insert(root_node.left_tail,
+                                                  node_id, data, new=True)
             else:
                 ###  processes the right-sub-tree
-                root_node.right_tail = self.insert(root_node.right_tail, node_id, data, new=True)
+                root_node.right_tail = self.insert(root_node.right_tail,
+                                                   node_id, data, new=True)
 
             return root_node
 
@@ -347,27 +320,68 @@ class R_Tree:
     def traverseRight(self, root_node):
         return root_node.right_tail
     
-    #def masterChildren(self, root_node):
+    def pp_children(self, root_node):
+        nodes = deque()
+        visited = set()
+        for x in root_node.master_tail:
+            indent_level = 0
+            nodes.appendleft(x)
+            while nodes:
+                current = nodes.popleft()
+                if current in visited:
+                    continue
+                
+                print '   ' * indent_level,
+                if current:
+                    print '+[%s]' % (current.data)
+                else:
+                    print '+[None]'
+                if hasattr(current, 'right_tail'):
+                    indent_level += 1
+                    nodes.appendleft(current.right_tail)
+                    
+
+        '''
         
+        i = "\n" + level * "  "
+        if len(elem):
+            if not elem.text or not elem.text.strip():
+                elem.text = i + "  "
+            if not elem.tail or not elem.tail.strip():
+                elem.tail = i
+            for elem in elem:
+                indent(elem, level+1)
+            if not elem.tail or not elem.tail.strip():
+                elem.tail = i
+        else:
+            if level and (not elem.tail or not elem.tail.strip()):
+                elem.tail = i
+        '''            
+    def __children_master(self, root_node):
+        nodes = deque()
+        for x in root_node.master_tail:
+            visited = set()
+
+            nodes.appendleft(x)
+        
+            while nodes:
+                current = nodes.popleft()
+                if current in visited:
+                    continue
+                if hasattr(current, 'right_tail'):
+                    nodes.appendleft(current.right_tail)
+                if hasattr(current, 'left_tail'):
+                    nodes.appendleft(current.left_tail)
+                
+                visited.add(current)
+                           
+        return visited
+
     def children(self, root_node):
         "returns a list of every child"
         if hasattr(root_node, '__class__'):
             if root_node.__class__.__name__ == 'masterNode':
-                for x in root_node.master_tail:
-                    visited = set()
-                    nodes = deque([root_node])
-        
-                    while nodes:
-                        current = nodes.popleft()
-                        if current in visited:
-                            continue
-                        if current.right_tail:
-                            nodes.appendleft(current.right_tail)
-                        if current.left_tail:
-                            nodes.appendleft(current.left_tail)
-                
-                        visited.add(current)
-                    
+                visited = self.__children_master(root_node)
             else:
                 visited = set()
                 nodes = deque([root_node])
@@ -399,8 +413,8 @@ if __name__ == '__main__':
     print r.children(more)
     
     grammar = Grammar()
-    v = linkGrammar.constituents("It's very hard to describe")
-    s = linkGrammar.sentence("It's very hard to describe")
+    v = linkGrammar.constituents("The quick brown fox jumps over the lazy dog")
+    s = linkGrammar.sentence("The quick brown fox jumps over the lazy dog")
     grammar.sentence_to_Tree(s)
     #c_Root = grammar.get_C_TreeRoot()
     rightTree = R_Tree()
