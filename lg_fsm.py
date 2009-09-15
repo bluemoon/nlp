@@ -6,17 +6,18 @@ def Error(fsm):
     
 def Period(fsm):
     #print str(fsm.memory.pop())
-    print 'period(%d)' % (fsm.counter)
+    #print 'period(%d)' % (fsm.counter)
+    return ['period', fsm.counter]
 
 def Root(fsm):
     fsm.counter = fsm.counter - 1
     
 def Declarative(fsm):
-    print 'declarative(%d, %d)' % (fsm.counter, fsm.counter+1)
-    
+    return ['declarative', fsm.counter, fsm.counter+1]
+
 def Subject(fsm):
-    print 'subject(%d, %d)' % (fsm.counter, fsm.counter+1)
+    return ['subject', fsm.counter, fsm.counter+1]
 
 def Object(fsm):
-    print 'object(%d, %d)' % (fsm.counter, fsm.counter+1)
+    return ['object', fsm.counter, fsm.counter+1]
 

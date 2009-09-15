@@ -228,7 +228,7 @@ class FSM:
         self.next_state = None
         self.counter += 1
         if self.action is not None:
-            self.action (self)
+            return self.action (self)
         
 
 
@@ -236,7 +236,10 @@ class FSM:
 
         """This takes a list and sends each element to process(). The list may
         be a string or any iterable object. """
-
+        return_values = []
+        
         for s in input_symbols:
-            self.process(s)
+            return_values.append(self.process(s))
+
+        return return_values
 

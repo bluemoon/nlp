@@ -4,6 +4,8 @@ import linkGrammar
 from fsm import FSM
 import lg_fsm as lgFSM
 
+import RBTree
+
 import itertools
 #from nltk.sem import logic
 
@@ -39,11 +41,111 @@ link_definitions ={
     'Z'  : 'Connects the preposition "as" to certain verbs',
     
 }
+class CNode:
+    left , right, data, data_left, data_right, data_extra = None, None, None, None, None, None
+    
+    def __init__(self, data, data_left, data_right, data_extra=None):
+        # initializes the data members
+        self.left = None
+        self.right = None
+        self.data = data
+        self.data_extra = data_extra
+        self.data_left = data_left
+        self.data_right = data_right
 
-## Wd(left, x) & Ss(y, z) & (x & y) -> subject(z, y)
-## TO(x, y) -> todo(x, y)
-## O(x, y) -> object(x, y)
-## Wi(x, y) -> imperative(x, y)
+class LR_Tree:
+    def addNode(self, data, l, r, data_extra=None):
+        # creates a new node and returns it
+        return CNode(data, l, r, data_extra)
+    
+    def insert(self, root, data, l, r, data_extra=None):
+        # inserts a new data
+        if root == None:
+            # it there isn't any data
+            # adds it and returns
+            return self.addNode(data, l, r, data_extra)
+        else:
+            # enters into the tree
+            if data <= root.data:
+                # if the data is less than the stored one
+                # goes into the left-sub-tree
+                root.left = self.insert(root.left, data, l, r, data_extra)
+            else:
+                # processes the right-sub-tree
+                root.right = self.insert(root.right, data, l, r, data_extra)
+            return root
+        
+    def lookup(self, root, target):
+        # looks for a value into the tree
+        if root == None:
+            return 0
+        else:
+            # if it has found it...
+            if target == root.data:
+                return 1
+            else:
+                if target < root.data:
+                    # left side
+                    return self.lookup(root.left, target)
+                else:
+                    # right side
+                    return self.lookup(root.right, target)
+    def getLeft(self, root):
+        return root.left
+
+    def getRight(self, root):
+        return root.right
+    
+    def minValue(self, root):
+        # goes down into the left
+        # arm and returns the last value
+        while(root.left != None):
+            root = root.left
+        return root.data
+
+    def maxDepth(self, root):
+        if root == None:
+            return 0
+        else:
+            # computes the two depths
+            ldepth = self.maxDepth(root.left)
+            rdepth = self.maxDepth(root.right)
+            # returns the appropriate depth
+            return max(ldepth, rdepth) + 1
+
+    def size(self, root):
+        if root == None:
+            return 0
+        else:
+            return self.size(root.left) + 1 + self.size(root.right)
+        
+    def printTree(self, root):
+        # prints the tree path
+        if root == None:
+            pass
+        else:
+            self.printTree(root.left)
+            print root.data,
+            print "(%s, %s)" % (root.data_left, root.data_right),
+            if root.data_extra:
+                print root.data_extra,
+                
+            self.printTree(root.right)
+            
+    def printRevTree(self, root):
+        # prints the tree path in reverse
+        # order
+        if root == None:
+            pass
+        else:
+            self.printRevTree(root.right)
+            print root.data,
+            self.printRevTree(root.left)
+
+###  Wd(left, x) & Ss(y, z) & (x & y) -> subject(z, y)
+###  TO(x, y) -> todo(x, y)
+###  O(x, y) -> object(x, y)
+###  Wi(x, y) -> imperative(x, y)
 
 class grammarFSM:
     def fsm_setup(self):
@@ -60,164 +162,88 @@ class grammarFSM:
         
     def fsm_run(self, input):
         print input
-        self.fsm.process_list(input)
+        return self.fsm.process_list(input)
 
 class Grammar:
     def __init__(self):
         self.g = grammarFSM()
         self.g.fsm_setup()
 
+        ### One tree for sentences
+        self.s_Tree = LR_Tree()
+        self.s_root = self.s_Tree.addNode(0, 0, 0)
+        
+        ### One for constituents
+        self.c_Tree = LR_Tree()
+        self.c_root = self.c_Tree.addNode(0, 0, 0)
 
+    def get_C_TreeRoot(self):
+        return self.c_root
+    
+    def sentence_to_Tree(self, sentence, cur_node=1):
+        for x in sentence[2]:
+            #print sentence[0][cur_node-1]
+            self.s_Tree.insert(self.s_root, cur_node, x[0], x[1])
+            cur_node += 1
+            
+        self.s_Tree.printTree(self.s_root)
+        print 
+        print self.s_Tree.minValue(self.s_root)
+        print self.s_Tree.maxDepth(self.s_root)
+        print self.s_Tree.size(self.s_root)
 
-def map_out((words,lengths,links,extra)):
-    mapCharacter = '+'
-    
-    print words, lengths, links
-    matrix = []
-    for x in xrange(len(lengths)):
-        matrix.append([])
-        y = lambda y: matrix[x].append(links[x])
-        map(y, range(lengths[x]))
-    
-    print matrix
-    word_counter = lambda wc: reduce(lambda x,y: x+y, map(lambda x: len(x), wc))
-    remap = lambda remap: reduce(lambda x,y: x+y, map(word_counter, remap))
-    total_map = map(remap, matrix)
-    print total_map
-    ## Get the longest string length
-    c_max_len = reduce(lambda x, y: max(x, y), total_map)
-    c_max_row = reduce(max, lengths)
-    i = 0
-    for row in matrix:
-        for subrow in row:
-            for column in subrow:               
-                    print column,
-                    print '+',
+    def constituent_to_Tree(self, sentence, constituent, head_node=None, cur_node_id=1, last_node=None):    
+        for x_const in constituent:
+            if isinstance(x_const, list):
+                if not last_node:
+                    last_node = head_node
+                    print 'Oh no'
                     
-        if len(row) % c_max_row == 0: 
-            print
-            
-        i += 1
-        
-    print
-    
-
-def draw_text((words, lengths, links)):
-    i = 0
-    pad_len = 4
-    while len(links) >= i:
-        l_pad_len = pad_len - len(links[i]) 
-        try:
-            r_pad_len = pad_len -len(links[i+1])
-            
-        except:
-            return
-        r_pad = r_pad_len * ' '
-        l_pad = l_pad_len * ' '
-        
-        print '%d %s%s   %s' % (lengths[i], links[i], l_pad, words[i])
-        i += 1
-    print
-    
-def relation((words, lengths, links)):
-    i = 0
-    while i < len(words):
-        try:
-            links[i+1]
-        except:
-            return
-
-        ## Regex:
-        ##    (*, Wd) & (Ss, *) -> subject(v1, v2)
-        ##
-        #print words[i],
-        #print links[i]
-        #
-        #print 'frame %d:' % (i),
-        ## Wd(left, x) & Ss(y, z) & (x & y) -> subject(z, y)
-        if links[i][1] == 'Wd' and links[i+1][0] == 'Ss':
-            print 'frame %d:' % (i),
-            print 'subject(%s, %s)' % (words[i], words[i+1])
-
-        ## TO(x, y) -> todo(x, y)
-        if links[i][0] == 'TO':
-            print 'frame %d:' % (i),
-            print 'todo(%s, %s) ' % (words[i-1], words[i+1])
-
-        if links[i][0] == 'Ox':
-            print 'frame %d:' % (i),
-            print 'object(%s, %s)' % (words[i-1], words[i])
-        ## O(x, y) -> object(x, y)
-        if links[i][0] == 'O':
-            print 'frame %d:' % (i),
-            print 'object(%s, %s)' % (words[i-1], words[i+1])
-
-        ## Wi(x, y) -> imperative(x, y)
-        if links[i][0] == 'Wi' and links[i-1][0] == 'Wi':
-            print 'frame %d:' % (i),
-            print 'imperative(%s -> %s)' % (words[i-2], words[i])
-
-        if links[i][0] == 'AF':
-            print 'frame %d:' % (i),
-            print 'object(%s, %s)' % (words[i+1], words[i-1])
-
-        i += 1
-
-
-def r_Const(const, input='', current=[]):
-    #r_filter = lambda y: filter(lambda x: isinstance(x, list), y)
-    #rmap = lambda y: map(lambda x:r_Const(x), y)
-    #r_map = map(rmap, const)
-    #print r_map
-    #r2_map = map(lambda x: r_Const(x), r_map)
-    for x in const:
-        if isinstance(x, list):
-            current.insert(0, len(x))
-            output = r_Const(x, input, current)
-            print output
-        else:
-            input += '('
-            input += x
-
-            cur = current.pop(0)
-            cur -= 1
-            
-            if cur == 0:
-                input += ')'
+                self.constituent_to_Tree(sentence, x_const, last_node, cur_node_id)    
             else:
-                current.insert(0, cur)
-         
-    for y in current:
-        for z in xrange(y):
-            input += ')'
+                left, right = sentence[2][cur_node_id]
+                #print sentence[2][cur_node_id]
+                extra_data = {'word' : sentence[0][cur_node_id], 'length' : sentence[1][cur_node_id]}
+                last_node = self.s_Tree.insert(head_node, cur_node_id, left, right, extra_data)
+
+            cur_node_id += 1
             
-    print input
-    return input
-    #if r_map:
-    #    r_Const(r_map)
-    
-def const_analysis(const):
-    r_Const(const)
 
-    
+    def cTreePrint(self):
+        self.c_Tree.printTree(self.c_root)
+        #self.c_Tree.printRevTree(self.c_root)
+
+        print 
+        print self.c_Tree.minValue(self.c_root)
+        print self.c_Tree.maxDepth(self.c_root)
+        print self.c_Tree.size(self.c_root)
+        print self.c_Tree.lookup(self.c_root, 3)
+        
+    def analyze(self, text):
+        pass
 
 
-g = grammarFSM()
-g.fsm_setup()
+#g = grammarFSM()
+#g.fsm_setup()
 
-
+grammar = Grammar()
 
 v = linkGrammar.constituents("It's very hard to describe")
 s = linkGrammar.sentence("It's very hard to describe")
-print const_analysis(v)
-#pprint.pprint(v)
-print g.fsm_run(s[3])
+
+grammar.sentence_to_Tree(s)
+
+c_Root = grammar.get_C_TreeRoot()
+grammar.constituent_to_Tree(s, v, c_Root)
+grammar.cTreePrint()
+
+#pprint.pprint(s)
+#print g.fsm_run(s[3])
 
 #j = linkGrammar.sentence("how are you?")
-c = linkGrammar.constituents("how are you?")
-s = linkGrammar.sentence("how are you?")
-const_analysis(c)
-print g.fsm_run(s[3])
+#c = linkGrammar.constituents("how are you?")
+#s = linkGrammar.sentence("how are you?")
+#print g.fsm_run(s[3])
 
 
 
