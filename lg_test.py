@@ -42,153 +42,7 @@ link_definitions ={
     'Z'  : 'Connects the preposition "as" to certain verbs',
     
 }
-class n_Node:
-    head, left_tail, right_tail, data = None, None, None, None
-    def __init__(self, node_id, data):
-        ### initializes the data members
-        self.head       = None
-        self.left_tail  = []
-        self.right_tail = []
-        self.node_id    = node_id
-        self.data       = data
 
-class R_Tree:
-    def addNode(self, data):
-        return n_Node(data)
-    
-    def insert(self, root_node, node_id, data):
-        if root_node == None:
-            return self.addNode(node_id, data)
-        else:
-            if node_id <= root.node_id:
-                # if the data is less than the stored one
-                # goes into the left-sub-tree
-                root_node.left_tail.append(self.insert(root_node.left_tail, node_id, data))
-            else:
-                # processes the right-sub-tree
-                root_node.right_tail.append(self.insert(root.right_tail, data))
-
-            return root_node
-
-    def traverseLeft(self, root_node):
-        pass
-    
-    def traverseRight(self, root_node):
-        pass
-    
-    def children(self, root_node, tree):
-        "returns a list of every child"
-        visited = set()
-        to_crawl = deque([token])
-        while to_crawl:
-            current = to_crawl.popleft()
-            if current in visited:
-                continue
-            visited.add(current)
-            node_children = set(tree[current])
-            to_crawl.extend(node_children - visited)
-        return list(visited)
-
-class CNode:
-    left , right, data, data_left, data_right, data_extra = None, None, None, None, None, None
-    
-    def __init__(self, data, data_left, data_right, data_extra=None):
-        # initializes the data members
-        self.left = None
-        self.right = None
-        self.data = data
-        self.data_extra = data_extra
-        self.data_left = data_left
-        self.data_right = data_right
-
-class LR_Tree:
-    def addNode(self, data, l, r, data_extra=None):
-        # creates a new node and returns it
-        return CNode(data, l, r, data_extra)
-    
-    def insert(self, root, data, l, r, data_extra=None):
-        # inserts a new data
-        if root == None:
-            # it there isn't any data
-            # adds it and returns
-            return self.addNode(data, l, r, data_extra)
-        else:
-            # enters into the tree
-            if data <= root.data:
-                # if the data is less than the stored one
-                # goes into the left-sub-tree
-                root.left = self.insert(root.left, data, l, r, data_extra)
-            else:
-                # processes the right-sub-tree
-                root.right = self.insert(root.right, data, l, r, data_extra)
-            return root
-        
-    def lookup(self, root, target):
-        # looks for a value into the tree
-        if root == None:
-            return 0
-        else:
-            # if it has found it...
-            if target == root.data:
-                return 1
-            else:
-                if target < root.data:
-                    # left side
-                    return self.lookup(root.left, target)
-                else:
-                    # right side
-                    return self.lookup(root.right, target)
-    def getLeft(self, root):
-        return root.left
-
-    def getRight(self, root):
-        return root.right
-    
-    def minValue(self, root):
-        # goes down into the left
-        # arm and returns the last value
-        while(root.left != None):
-            root = root.left
-        return root.data
-
-    def maxDepth(self, root):
-        if root == None:
-            return 0
-        else:
-            # computes the two depths
-            ldepth = self.maxDepth(root.left)
-            rdepth = self.maxDepth(root.right)
-            # returns the appropriate depth
-            return max(ldepth, rdepth) + 1
-
-    def size(self, root):
-        if root == None:
-            return 0
-        else:
-            return self.size(root.left) + 1 + self.size(root.right)
-        
-    def printTree(self, root):
-        # prints the tree path
-        if root == None:
-            pass
-        else:
-            self.printTree(root.left)
-            print root.data,
-            print "(%s, %s)" % (root.data_left, root.data_right),
-            if root.data_extra:
-                print root.data_extra,
-                
-            self.printTree(root.right)
-            
-    def printRevTree(self, root):
-        # prints the tree path in reverse
-        # order
-        if root == None:
-            pass
-        else:
-            self.printRevTree(root.right)
-            print root.data,
-            self.printRevTree(root.left)
 
 ###  Wd(left, x) & Ss(y, z) & (x & y) -> subject(z, y)
 ###  TO(x, y) -> todo(x, y)
@@ -218,129 +72,215 @@ class Grammar:
         self.g.fsm_setup()
 
         ### One tree for sentences
-        self.s_Tree = LR_Tree()
-        self.s_root = self.s_Tree.addNode(0, 0, 0)
+        self.s_Tree = R_Tree()
+        #self.s_root = self.s_Tree.addNode(0, 0, 0)
         
         ### One for constituents
-        self.c_Tree = LR_Tree()
-        self.c_root = self.c_Tree.addNode(0, 0, 0)
+        self.c_Tree = R_Tree()
+        #self.c_root = self.c_Tree.addNode(0, 0, 0)
         
         ### and one for graphing
         self.G = nx.Graph()
         
-    def get_C_TreeRoot(self):
-        return self.c_root
+    def flatten(self, List):
+        if isinstance(List, list):
+            return map(self.flatten, List)
+        else:
+            return List
+
+    def subtree_indices(self, tree_rep):
+        tree = [([], tree_rep)]        
+        list_of_indexLists = []
+        while tree != []:  
+            (indices, sub_tree) = tree.pop(0)
+            list_of_indexLists.append(indices)
+            for (ordinal, sst) in enumerate(sub_tree[1:]):
+                if isinstance(sst, list):
+                    idxs = indices[:]
+                    idxs.append(ordinal+1)
+                    tree.append((idxs, sst))
+                    
+        return list_of_indexLists
     
+    def max_depth(self, List):
+        accessorList = self.subtree_indices(List)
+        a_list = self.flatten(accessorList)
+        c_max_depth = reduce(lambda x, y: max(x, y), a_list)
+        if c_max_depth:
+            return max(c_max_depth)
+        
     def sentence_to_Tree(self, sentence, cur_node=1):
         G = nx.Graph()
         #colors = range(len(sentence )*2)
         for x in sentence[2]:
-            self.s_Tree.insert(self.s_root, cur_node, x[0], x[1])
+            self.s_Tree.insert_onto_master(cur_node, data=[x[0], x[1]])
             #G.add_nodes_from([x[0],x[1]])
             G.add_edge(sentence[2][cur_node-1][0], sentence[2][cur_node-1][1])
             G.add_edge(sentence[2][cur_node-2][1], sentence[2][cur_node-1][0])
             
             cur_node += 1
             
-        self.s_Tree.printTree(self.s_root)
-        pos=nx.graphviz_layout(G,prog='twopi',args='')
+        #self.s_Tree.printTree(self.s_root)
+        pos = nx.graphviz_layout(G,prog='twopi',args='')
         nx.draw(G, pos, node_color='#A0CBE2', width=1.25, edge_cmap=plt.cm.Blues)
         plt.axis('off')
         plt.savefig("tree_structure.png")
-        plt.show()
+        #plt.show()
         
-    def constituent_to_Tree(self, sentence, constituent, head_node, cur_node_id=1, last_node=None):    
-        #print head_node
-        #print last_node
+    def constituent_to_Tree(self, sentence, constituent, cur_node_id=1, last_node=None, depth=0):
+        x_const_len = 0
+        r_depth     = depth
+        last_node_  = None
+        
+        print self.max_depth(constituent)
+        print constituent
+
         for x_const in constituent:
             if isinstance(x_const, list):
-                self.constituent_to_Tree(sentence, x_const, head_node, cur_node_id, last_node)
+                r_depth += 1
+                self.constituent_to_Tree(sentence, x_const, cur_node_id, last_node_, r_depth)
+                
             else:
                 left, right = sentence[2][cur_node_id]
-                extra_data = {'word' : sentence[0][cur_node_id], 'length' : sentence[1][cur_node_id]}
-                word = sentence[0][cur_node_id]
-
+                data = [ sentence[0][cur_node_id], left, right, sentence[1][cur_node_id]]
+                
                 #self.G.add_node(x_const)
                 #self.G.add_edge(x_const, left)
                 #self.G.add_edge(x_const, right)
+                
+                x_const_len = len(x_const)
+                hasList     = False
+                
+                for possibleList in range(x_const_len):
+                    if isinstance(x_const[possibleList], list):
+                        hasList = True
 
-                last_word = word
 
                 if not last_node:
-                    last_node = self.s_Tree.insert(head_node, cur_node_id, left, right, extra_data)
+                    last_node_ = self.c_Tree.insert_onto_master(cur_node_id, data)
                 else:
-                    last_node = self.s_Tree.insert(last_node, cur_node_id, left, right, extra_data)
-                
+                    last_node_ = self.c_Tree.insert(last_node, cur_node_id, data)
+
+                if not hasList:
+                    r_depth -= 1
+
+                if r_depth == 0:
+                    last_node = None
+                    
             cur_node_id += 1
-            
         #pos = nx.spring_layout(self.G)
         #nx.draw(self.G, pos, node_color='#A0CBE2', width=1.2, edge_cmap=plt.cm.Blues)
         #plt.savefig("c_tree_structure.png")
         #plt.show()   
 
     def cTreePrint(self):
-        self.c_Tree.printTree(self.c_root)
-        print
-        pprint.pprint(self.c_root.__dict__['right'])
+        #self.c_Tree.printTree(self.c_root)
+        #pprint.pprint(self.c_root.__dict__['right'])
+        for nodes in self.c_Tree.getMasterNode().master_tail:
+            print r.children(nodes)
         
     def analyze(self, text):
         pass
 
-    def children(token, tree):
+
+class masterNode:
+    master_tail = None
+    node_id     = None
+    
+    def __init__(self):
+        self.master_tail  = []
+        self.node_id      = 0
+
+class n_Node:
+    head, left_tail, right_tail, data = None, None, None, None
+    
+    def __init__(self, node_id, data):
+        ### initializes the data members
+        self.head       = None
+        self.left_tail  = None
+        self.right_tail = None
+        self.node_id    = node_id
+        self.data       = data
+
+    def __repr__(self):
+        return '<%d, %s>' % (self.node_id, self.data)
+    
+class R_Tree:
+    def __init__(self):
+        self.master = masterNode()
+
+    def getMasterNode(self):
+        return self.master
+    
+    def addNode(self, node_id, data):
+        return n_Node(node_id, data)
+    
+    def insert_onto_master(self,  node_id, data):
+        node = self.addNode(node_id, data)
+        self.master.master_tail.append(node)
+        return node
+    
+    def insert(self, root_node, node_id, data, new=False):
+        if new:
+            return self.addNode(node_id, data)
+        else:
+            if node_id <= root_node.node_id:
+                ###  if the data is less than the stored one
+                ###  goes into the left-sub-tree
+                root_node.left_tail = self.insert(root_node.left_tail, node_id, data, new=True)
+            else:
+                ###  processes the right-sub-tree
+                root_node.right_tail = self.insert(root_node.right_tail, node_id, data, new=True)
+
+            return root_node
+
+    def traverseLeft(self, root_node):
+        return root_node.left_tail
+    def traverseRight(self, root_node):
+        return root_node.right_tail
+    
+    def children(self, root_node):
         "returns a list of every child"
         visited = set()
-        to_crawl = deque([token])
-        while to_crawl:
-            current = to_crawl.popleft()
+        nodes = deque([root_node])
+
+        while nodes:
+            current = nodes.popleft()
             if current in visited:
                 continue
+            if current.right_tail:
+                nodes.appendleft(current.right_tail)
+            if current.left_tail:
+                nodes.appendleft(current.left_tail)
+                
             visited.add(current)
-            node_children = set(tree[current])
-            to_crawl.extend(node_children - visited)
+            #node_children = set()
+            #nodes.extend(node_children - visited)
+            
         return list(visited)
 
-#g = grammarFSM()
-#g.fsm_setup()
-
-grammar = Grammar()
-
-v = linkGrammar.constituents("It's very hard to describe")
-s = linkGrammar.sentence("It's very hard to describe")
-
-grammar.sentence_to_Tree(s)
-
-c_Root = grammar.get_C_TreeRoot()
-grammar.constituent_to_Tree(s, v, c_Root)
-grammar.cTreePrint()
-
-#pprint.pprint(s)
-#print g.fsm_run(s[3])
-
-#j = linkGrammar.sentence("how are you?")
-#c = linkGrammar.constituents("how are you?")
-#s = linkGrammar.sentence("how are you?")
-#print g.fsm_run(s[3])
 
 
+if __name__ == '__main__':
+    r = R_Tree()
+    #masterNode = r.master_Node()
+    #root = r.addNode(0, 'arg!')
+    to_master = r.insert_onto_master(1, 'blah!')
+    more = r.insert(to_master, 2, 'blah!')
+    mm = r.insert(more, 3, 'fuck you')
+    
+    print r.getMasterNode().__dict__
+    print r.children(more)
+    
+    grammar = Grammar()
+    v = linkGrammar.constituents("It's very hard to describe")
+    s = linkGrammar.sentence("It's very hard to describe")
+    grammar.sentence_to_Tree(s)
+    #c_Root = grammar.get_C_TreeRoot()
+    rightTree = R_Tree()
+    
+    grammar.constituent_to_Tree(s, v)
+    grammar.cTreePrint()
 
-#draw_text(j)
-#print 'sentence 2,',
-#pprint.pprint(j)
-#relation(j)
-#g = grammarFSM()
-#g.fsm_setup()
-#print g.fsm_run(j[3])
-#map_out(j)
-
-#j = linkGrammar.sentence("chomsky, find me cookies.")
-#const = linkGrammar.constituents("chomsky, find me cookies.")
-#cleanPrint(const)
-#print linkGrammar.domains("chomsky, find me cookies.")
-
-#draw_text(j)
-#print 'sentence 3,',
-#pprint.pprint(j)
-#g = grammarFSM()
-#g.fsm_setup()
-#print g.fsm_run(j[3])
-#relation(j)
+    
+    
