@@ -1,12 +1,13 @@
 import sys
 import pprint
-import linkGrammar
+
 from fsm import FSM
 import lg_fsm as lgFSM
+import linkGrammar
 
-import RBTree
-
-import itertools
+import networkx as nx
+import matplotlib.pyplot as plt
+from collections import deque
 #from nltk.sem import logic
 
 
@@ -41,6 +42,53 @@ link_definitions ={
     'Z'  : 'Connects the preposition "as" to certain verbs',
     
 }
+class n_Node:
+    head, left_tail, right_tail, data = None, None, None, None
+    def __init__(self, node_id, data):
+        ### initializes the data members
+        self.head       = None
+        self.left_tail  = []
+        self.right_tail = []
+        self.node_id    = node_id
+        self.data       = data
+
+class R_Tree:
+    def addNode(self, data):
+        return n_Node(data)
+    
+    def insert(self, root_node, node_id, data):
+        if root_node == None:
+            return self.addNode(node_id, data)
+        else:
+            if node_id <= root.node_id:
+                # if the data is less than the stored one
+                # goes into the left-sub-tree
+                root_node.left_tail.append(self.insert(root_node.left_tail, node_id, data))
+            else:
+                # processes the right-sub-tree
+                root_node.right_tail.append(self.insert(root.right_tail, data))
+
+            return root_node
+
+    def traverseLeft(self, root_node):
+        pass
+    
+    def traverseRight(self, root_node):
+        pass
+    
+    def children(self, root_node, tree):
+        "returns a list of every child"
+        visited = set()
+        to_crawl = deque([token])
+        while to_crawl:
+            current = to_crawl.popleft()
+            if current in visited:
+                continue
+            visited.add(current)
+            node_children = set(tree[current])
+            to_crawl.extend(node_children - visited)
+        return list(visited)
+
 class CNode:
     left , right, data, data_left, data_right, data_extra = None, None, None, None, None, None
     
@@ -176,52 +224,80 @@ class Grammar:
         ### One for constituents
         self.c_Tree = LR_Tree()
         self.c_root = self.c_Tree.addNode(0, 0, 0)
-
+        
+        ### and one for graphing
+        self.G = nx.Graph()
+        
     def get_C_TreeRoot(self):
         return self.c_root
     
     def sentence_to_Tree(self, sentence, cur_node=1):
+        G = nx.Graph()
+        #colors = range(len(sentence )*2)
         for x in sentence[2]:
-            #print sentence[0][cur_node-1]
             self.s_Tree.insert(self.s_root, cur_node, x[0], x[1])
+            #G.add_nodes_from([x[0],x[1]])
+            G.add_edge(sentence[2][cur_node-1][0], sentence[2][cur_node-1][1])
+            G.add_edge(sentence[2][cur_node-2][1], sentence[2][cur_node-1][0])
+            
             cur_node += 1
             
         self.s_Tree.printTree(self.s_root)
-        print 
-        print self.s_Tree.minValue(self.s_root)
-        print self.s_Tree.maxDepth(self.s_root)
-        print self.s_Tree.size(self.s_root)
-
-    def constituent_to_Tree(self, sentence, constituent, head_node=None, cur_node_id=1, last_node=None):    
+        pos=nx.graphviz_layout(G,prog='twopi',args='')
+        nx.draw(G, pos, node_color='#A0CBE2', width=1.25, edge_cmap=plt.cm.Blues)
+        plt.axis('off')
+        plt.savefig("tree_structure.png")
+        plt.show()
+        
+    def constituent_to_Tree(self, sentence, constituent, head_node, cur_node_id=1, last_node=None):    
+        #print head_node
+        #print last_node
         for x_const in constituent:
             if isinstance(x_const, list):
-                if not last_node:
-                    last_node = head_node
-                    print 'Oh no'
-                    
-                self.constituent_to_Tree(sentence, x_const, last_node, cur_node_id)    
+                self.constituent_to_Tree(sentence, x_const, head_node, cur_node_id, last_node)
             else:
                 left, right = sentence[2][cur_node_id]
-                #print sentence[2][cur_node_id]
                 extra_data = {'word' : sentence[0][cur_node_id], 'length' : sentence[1][cur_node_id]}
-                last_node = self.s_Tree.insert(head_node, cur_node_id, left, right, extra_data)
+                word = sentence[0][cur_node_id]
 
+                #self.G.add_node(x_const)
+                #self.G.add_edge(x_const, left)
+                #self.G.add_edge(x_const, right)
+
+                last_word = word
+
+                if not last_node:
+                    last_node = self.s_Tree.insert(head_node, cur_node_id, left, right, extra_data)
+                else:
+                    last_node = self.s_Tree.insert(last_node, cur_node_id, left, right, extra_data)
+                
             cur_node_id += 1
             
+        #pos = nx.spring_layout(self.G)
+        #nx.draw(self.G, pos, node_color='#A0CBE2', width=1.2, edge_cmap=plt.cm.Blues)
+        #plt.savefig("c_tree_structure.png")
+        #plt.show()   
 
     def cTreePrint(self):
         self.c_Tree.printTree(self.c_root)
-        #self.c_Tree.printRevTree(self.c_root)
-
-        print 
-        print self.c_Tree.minValue(self.c_root)
-        print self.c_Tree.maxDepth(self.c_root)
-        print self.c_Tree.size(self.c_root)
-        print self.c_Tree.lookup(self.c_root, 3)
+        print
+        pprint.pprint(self.c_root.__dict__['right'])
         
     def analyze(self, text):
         pass
 
+    def children(token, tree):
+        "returns a list of every child"
+        visited = set()
+        to_crawl = deque([token])
+        while to_crawl:
+            current = to_crawl.popleft()
+            if current in visited:
+                continue
+            visited.add(current)
+            node_children = set(tree[current])
+            to_crawl.extend(node_children - visited)
+        return list(visited)
 
 #g = grammarFSM()
 #g.fsm_setup()
