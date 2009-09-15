@@ -82,24 +82,29 @@ class Grammar:
         ### and one for graphing
         self.G = nx.Graph()
         
+    #def flatten(self, List):
+    #    if isinstance(List, list):
+    #        return map(self.flatten, List)
+    #    else:
+    #        return List
+
     def flatten(self, List):
-        if isinstance(List, list):
-            return map(self.flatten, List)
-        else:
-            return List
+        return reduce(list.__add__, map(lambda x: list(x), [y for y in List]))
 
     def subtree_indices(self, tree_rep):
         tree = [([], tree_rep)]        
         list_of_indexLists = []
         while tree != []:  
             (indices, sub_tree) = tree.pop(0)
+            print indices
             list_of_indexLists.append(indices)
             for (ordinal, sst) in enumerate(sub_tree[1:]):
                 if isinstance(sst, list):
                     idxs = indices[:]
                     idxs.append(ordinal+1)
                     tree.append((idxs, sst))
-                    
+
+        
         return list_of_indexLists
     
     def max_depth(self, List):
@@ -110,72 +115,87 @@ class Grammar:
             return max(c_max_depth)
         
     def sentence_to_Tree(self, sentence, cur_node=1):
-        G = nx.Graph()
+        #G = nx.Graph()
         #colors = range(len(sentence )*2)
         for x in sentence[2]:
             self.s_Tree.insert_onto_master(cur_node, data=[x[0], x[1]])
             #G.add_nodes_from([x[0],x[1]])
-            G.add_edge(sentence[2][cur_node-1][0], sentence[2][cur_node-1][1])
-            G.add_edge(sentence[2][cur_node-2][1], sentence[2][cur_node-1][0])
+            #G.add_edge(sentence[2][cur_node-1][0], sentence[2][cur_node-1][1])
+            #G.add_edge(sentence[2][cur_node-2][1], sentence[2][cur_node-1][0])
             
             cur_node += 1
             
         #self.s_Tree.printTree(self.s_root)
-        pos = nx.graphviz_layout(G,prog='twopi',args='')
-        nx.draw(G, pos, node_color='#A0CBE2', width=1.25, edge_cmap=plt.cm.Blues)
-        plt.axis('off')
-        plt.savefig("tree_structure.png")
+        #pos = nx.graphviz_layout(G,prog='twopi',args='')
+        #nx.draw(G, pos, node_color='#A0CBE2', width=1.25, edge_cmap=plt.cm.Blues)
+        #plt.axis('off')
+        #plt.savefig("tree_structure.png")
         #plt.show()
         
-    def constituent_to_Tree(self, sentence, constituent, cur_node_id=1, last_node=None, depth=0):
+    def constituent_to_Tree(self, sentence, constituent, consti_depths, cur_node_id=1, last_node=None, depth=0, last_depth=0):
         x_const_len = 0
         r_depth     = depth
         last_node_  = None
         
-        print self.max_depth(constituent)
-        print constituent
-
+        flat_depths = self.flatten(consti)
+        #print 'flat: %s' % flat_depths
+        #print 'depth: %s' % consti_depths[cur_node_id-1]
+        #print 'const: %s' % constituent
         for x_const in constituent:
+            x_const_len = len(x_const)
+            #print 'r_depth: %d' % r_depth
+            #print 'cur_node: %d' % cur_node_id
+            
             if isinstance(x_const, list):
-                r_depth += 1
-                self.constituent_to_Tree(sentence, x_const, cur_node_id, last_node_, r_depth)
+                if len(x_const) >= 1:
+                    r_depth += 1
+                    
+                self.constituent_to_Tree(sentence, x_const, consti_depths, cur_node_id, last_node_, r_depth)
                 
             else:
                 left, right = sentence[2][cur_node_id]
-                data = [ sentence[0][cur_node_id], left, right, sentence[1][cur_node_id]]
-                
+                data = [sentence[0][cur_node_id], left, right, sentence[1][cur_node_id]]
+                word = sentence[0][cur_node_id]
                 #self.G.add_node(x_const)
-                #self.G.add_edge(x_const, left)
                 #self.G.add_edge(x_const, right)
                 
-                x_const_len = len(x_const)
-                hasList     = False
+
+                hasList = False
                 
                 for possibleList in range(x_const_len):
                     if isinstance(x_const[possibleList], list):
-                        hasList = True
+                        if len(x_const[possibleList]) >= 1:
+                            hasList = True
 
-
+                
                 if not last_node:
                     last_node_ = self.c_Tree.insert_onto_master(cur_node_id, data)
+                    self.G.add_edge(sentence[0][cur_node_id-1], word)
                 else:
                     last_node_ = self.c_Tree.insert(last_node, cur_node_id, data)
-
+                    self.G.add_edge(sentence[0][cur_node_id-1], word)
+                    
                 if not hasList:
                     r_depth -= 1
 
-                if r_depth == 0:
-                    last_node = None
-                    
+                if r_depth <= 1:
+                    last_node_ = None
+
+                print last_node_
+
             cur_node_id += 1
+            
+        
         #pos = nx.spring_layout(self.G)
-        #nx.draw(self.G, pos, node_color='#A0CBE2', width=1.2, edge_cmap=plt.cm.Blues)
+        #nx.draw(self.G, node_color='#A0CBE2', width=1.2, edge_cmap=plt.cm.Blues)
         #plt.savefig("c_tree_structure.png")
         #plt.show()   
-
+        return self.c_Tree
+    
     def cTreePrint(self):
         #self.c_Tree.printTree(self.c_root)
         #pprint.pprint(self.c_root.__dict__['right'])
+        #print self.c_Tree.getMasterNode().master_tail
         for nodes in self.c_Tree.getMasterNode().master_tail:
             print r.children(nodes)
         
@@ -214,6 +234,35 @@ class R_Tree:
     
     def addNode(self, node_id, data):
         return n_Node(node_id, data)
+    
+    def graphTree(self, root_node):
+        G = nx.Graph()
+        visited = []
+        nodes = deque([root_node])
+
+        i = 0
+        while nodes:
+            current = nodes.popleft()
+            #G.add_node(current)            
+            if current in visited:
+                continue
+            if current.right_tail:
+                nodes.appendleft(current.right_tail)
+                #G.add_edge(current, current.right_tail)
+            if current.left_tail:
+                nodes.appendleft(current.left_tail)
+                #G.add_edge(current, current.left_tail)
+
+            
+            visited.append(current)
+            G.add_edge(current, visited[i-1])
+            #node_children = set()
+            #nodes.extend(node_children - visited)
+            i += 1
+            
+        nx.draw(self.G, node_color='#A0CBE2', width=1.2, edge_cmap=plt.cm.Blues)
+        plt.savefig("c_tree_structure.png")
+
     
     def insert_onto_master(self,  node_id, data):
         node = self.addNode(node_id, data)
@@ -278,8 +327,9 @@ if __name__ == '__main__':
     grammar.sentence_to_Tree(s)
     #c_Root = grammar.get_C_TreeRoot()
     rightTree = R_Tree()
-    
-    grammar.constituent_to_Tree(s, v)
+    consti = grammar.subtree_indices(v)
+    tree = grammar.constituent_to_Tree(s, v, consti)
+    tree.graphTree()
     grammar.cTreePrint()
 
     
