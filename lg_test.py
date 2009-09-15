@@ -239,13 +239,11 @@ class R_Tree:
         G = nx.DiGraph()
         graph_itr = 1
         visited   = []
-
-        #G.add_node('HEAD')
+        nodes     = deque()
+        ###  Acyclic tree traversal
         if hasattr(root_node, '__class__'):
             if root_node.__class__.__name__ == 'masterNode':
-                nodes = deque()
                 for x in root_node.master_tail:
-                    #G.add_edge('HEAD', x)
                     nodes.appendleft(x)
                     while nodes:
                         current = nodes.popleft()
@@ -254,8 +252,9 @@ class R_Tree:
                         if hasattr(current, 'right_tail'):
                             if current.right_tail:
                                 G.add_edge(current, current.right_tail)
-                            #print 'c: %s' % current
-                            #print 'c_tail: %s' % current.right_tail
+                                
+                            ###print 'c: %s' % current
+                            ###print 'c_tail: %s' % current.right_tail
                             nodes.appendleft(current.right_tail)
                         if hasattr(current, 'left_tail'):
                             nodes.appendleft(current.left_tail)
@@ -266,8 +265,6 @@ class R_Tree:
                         elif current != None:
                             G.add_node(current)
                             
-                        #print G.number_of_nodes()
-                        #print G.number_of_edges()
                         graph_itr += 1
                     
             else:
