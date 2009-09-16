@@ -56,7 +56,7 @@ def debug(obj, prefix=None):
     #frame = inspect.currentframe()
     #with_caller = '[%s:%s:%d] %s'
     #without_caller = '[%s:%d] %s'
-    
+
     caller_module = inspect.stack()[1][1]
     caller_method = inspect.stack()[1][3]
     from_line     = inspect.stack()[1][2]
@@ -70,18 +70,18 @@ def debug(obj, prefix=None):
     else:
         print '[%s-%d] %s: ' % (caller_method, from_line, prefix),
         pprint.pprint(obj)
-        
+
     #LastDebugged = caller_method
     #print 'value: %s ' % repr(object),
     #print 'type: %s ' % type(obj),
     #print 'id: %s ' % id(obj),
-    
+
 class list_functions:
     def flatten(self, List):
         ### take a list of varied depth
         ### and flatten it! with no recursion
         return reduce(list.__add__, map(lambda x: list(x), [y for y in List]))
-    
+
     def print_list(self, List):
         stack = [(List, -1)]
         while stack:
@@ -91,7 +91,7 @@ class list_functions:
                     stack.append((i, level+1))
             else:
                 print "\t" * level, item
-        
+
     def max_depth(self, List):
         accessorList = self.subtree_indices(List)
         a_list = self.flatten(accessorList)
@@ -115,12 +115,12 @@ class list_functions:
 
                     debug(idxs)
                     debug(ordinal)
-                    
+
                     if len(idxs) == 0:
                         tree_indices.append([0])
                     else:
                         tree_indices.append(idxs)
-                        
+
                     idxs.append(ordinal+1)
                     tree.append((idxs, subTree))
 
@@ -166,7 +166,8 @@ class Grammar:
             self.s_Tree.insert_onto_master(cur_node, data=[x[0], x[1]])
             cur_node += 1
 
-    def constToTree(self, sentence, constituent):        
+    def constToTree(self, sentence, constituent):
+
         t_currentNode = 0
         t_constituent = [(constituent, -1)]
         t_nodes       = deque()
@@ -177,18 +178,21 @@ class Grammar:
                 for i in reversed(item):
                     t_constituent.append((i, level + 1))
             else:
+                data = [item, sentence[0][t_currentNode+1],\
+                        sentence[2][t_currentNode][0],\
+                        sentence[2][t_currentNode][1]]
+                
                 if level == 1:
-                    master = self.c_Tree.insert_onto_master(t_currentNode, item)
+                    master = self.c_Tree.insert_onto_master(t_currentNode, data)
                     t_nodes.appendleft(master)
                 else:
                     previousNode = t_nodes[0]
-
                     if previousNode.right_tail:
-                        ## debug(previousNode.right_tail)
-                        lastNode = self.c_Tree.insert(previousNode.right_tail, t_currentNode, item, level)
+                        lastNode = self.c_Tree.insert(previousNode.right_tail,
+                                                      t_currentNode, data, level)
                     else:
-                        ## debug(previousNode)
-                        lastNode = self.c_Tree.insert(previousNode, t_currentNode, item, level)
+                        lastNode = self.c_Tree.insert(previousNode,
+                                                      t_currentNode, data, level)
                     t_nodes.appendleft(lastNode)
 
                     
@@ -272,8 +276,10 @@ class R_Tree:
                             nodes.appendleft(current.left_tail)
                         
                         visited.append(current)
-                        if visited[graph_itr-2] != current and current != None and visited[graph_itr-2] != None:
+                        if visited[graph_itr-2] != current and current != None\
+                            and visited[graph_itr-2] != None:
                             G.add_edges_from([(visited[graph_itr-2], current)])
+                            
                         elif current != None:
                             G.add_node(current)
                             
@@ -351,11 +357,52 @@ class R_Tree:
 
             return root_node
 
-    def traverseLeft(self, root_node):
-        return root_node.left_tail
+    def travel_left(self, root_node):
+        if root_node.left_tail:
+            return root_node.left_tail
+        else:
+            return False
     
-    def traverseRight(self, root_node):
-        return root_node.right_tail
+    def travel_right(self, root_node=None):
+        nodes = deque()
+        
+        if root_node == None:
+            root_node = self.master
+
+        if isinstance(root_node, masterNode):
+            for x in root_node.master_tail:
+                visited = set()
+                nodes.appendleft(x)
+        
+                while nodes:
+                    current = nodes.popleft()
+                    if current in visited:
+                        continue
+                    if hasattr(current, 'right_tail'):
+                        nodes.appendleft(current.right_tail)
+                    if hasattr(current, 'left_tail'):
+                        nodes.appendleft(current.left_tail)
+                        
+                    if current:
+                        visited.add(current)
+                        yield current
+        else:
+            visited = set()
+            nodes.appendleft(root_node)
+        
+            while nodes:
+                current = nodes.popleft()
+                if current in visited:
+                    continue
+                if hasattr(current, 'right_tail'):
+                    nodes.appendleft(current.right_tail)
+                if hasattr(current, 'left_tail'):
+                    nodes.appendleft(current.left_tail)
+                        
+                if current:
+                    visited.add(current)
+                    yield current
+
     
     def pp_children(self, root_node):
         nodes = deque()
@@ -369,7 +416,8 @@ class R_Tree:
                     continue
                 
                 if current:
-                    print '   ' * indent_level,
+                    print 'level: %s' % current.level,
+                    print '  ' * indent_level,
                     print '+[%s]' % (current.data)
 
                 if hasattr(current, 'right_tail'):
@@ -419,28 +467,78 @@ class R_Tree:
         return list(visited)
 
 
+class Object:
+    data    = None
+    ownedBy = None
+    
+    def __init__(self, data):
+        self.data = data
+    def __repr__(self):
+        return '<%s>' % (self.data)
+    
+class Owner:
+    owns    = None
+    ownedBy = None
+    
+    def __init__(self):
+        self.owns = []
+    def __repr__(self):
+        return '<%s>' % (self.owns)
+        
+class TheOwner:
+    master = None
+    def __init__(self):
+        self.master = Owner()
+        
+    def addObject(self, data, ownedBy=None):
+        if ownedBy == None:
+            ownedBy = self.master
 
+        obj = Object(data)
+        obj.ownedBy = ownedBy
+        if ownedBy:
+            ownedBy.owns.append(obj)
+        
+        return obj
+    
+    def addOwner(self, ownedBy=None):
+        if ownedBy == None:
+            ownedBy = self.master
+
+        obj = Owner()
+        obj.ownedBy = ownedBy
+        
+        if ownedBy:
+            ownedBy.owns.append(obj)
+        
+        return obj
+
+    def getParent(self, Obj):
+        return Obj.ownedBy
+    
 if __name__ == '__main__':
+    O = TheOwner()
+    O.addObject('data!')
+    owns = O.addOwner()
+    O.addObject('moredata!', owns)
+    
+    debug(O.master.owns)
+    
     r = R_Tree()
-    #masterNode = r.master_Node()
-    #root = r.addNode(0, 'arg!')
-    to_master = r.insert_onto_master(1, 'blah!')
-    more = r.insert(to_master, 2, 'blah!', 0)
-    mm = r.insert(more, 3, 'fuck you', 0)
-    
-    #print r.getMasterNode().__dict__
-    #print r.children(more)
-    
     grammar = Grammar()
-    v = linkGrammar.constituents("The quick brown fox jumps over the lazy dog")
-    s = linkGrammar.sentence("The quick brown fox jumps over the lazy dog")
-    grammar.sentence_to_Tree(s)
-    #c_Root = grammar.get_C_TreeRoot()
-    rightTree = R_Tree()
-    #consti = grammar.subtree_indices(v)
-    tree = grammar.constToTree(s, v)
-    tree.graphTree(tree.getMasterNode())
-    grammar.cTreePrint()
+    sentences = ["I've never really gotten into it."]
+    for sentence in sentences:
+        v = linkGrammar.constituents(sentence)
+        s = linkGrammar.sentence(sentence)
+        grammar.sentence_to_Tree(s)
+        #c_Root = grammar.get_C_TreeRoot()
+        rightTree = R_Tree()
+        #consti = grammar.subtree_indices(v)
+        tree = grammar.constToTree(s, v)
+        #tree.graphTree(tree.getMasterNode())
+        grammar.cTreePrint()
+        for x in tree.travel_right():
+            print x
 
     
     
