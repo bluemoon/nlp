@@ -8,6 +8,7 @@ import linkGrammar
 import networkx as nx
 import matplotlib.pyplot as plt
 from collections import deque
+import inspect
 #from nltk.sem import logic
 
 
@@ -49,6 +50,33 @@ link_definitions ={
 ###  O(x, y) -> object(x, y)
 ###  Wi(x, y) -> imperative(x, y)
 
+
+def debug(obj, prefix=None):
+    #pprint(inspect.getmembers(obj))
+    #frame = inspect.currentframe()
+    #with_caller = '[%s:%s:%d] %s'
+    #without_caller = '[%s:%d] %s'
+    
+    caller_module = inspect.stack()[1][1]
+    caller_method = inspect.stack()[1][3]
+    from_line     = inspect.stack()[1][2]
+    #if not LastDebugged or LastDebugged != caller_method:
+    #    print '--> [func:%s]' % caller_method
+    #else:
+    #    print '[line:%d] %s' % (caller_method, from_line, repr(obj))
+    if not prefix:
+        print '[%s-%d]: ' % (caller_method, from_line),
+        pprint.pprint(obj)
+    else:
+        print '[%s-%d] %s: ' % (caller_method, from_line, prefix),
+        pprint.pprint(obj)
+        
+    #LastDebugged = caller_method
+    #print 'value: %s ' % repr(object),
+    #print 'type: %s ' % type(obj),
+    #print 'id: %s ' % id(obj),
+    
+    
 class grammarFSM:
     def fsm_setup(self):
         self.fsm = FSM('INIT', [])
@@ -86,23 +114,77 @@ class Grammar:
         ### take a list of varied depth
         ### and flatten it! with no recursion
         return reduce(list.__add__, map(lambda x: list(x), [y for y in List]))
+    
+    def print_list(self, List):
+        stack = [(List, -1)]
+        while stack:
+            item, level = stack.pop()
+            if isinstance(item, list):
+                for i in reversed(item):
+                    stack.append((i, level+1))
+            else:
+                print "\t" * level, item
+                
+    def list_depth(self, tree_rep):
+        tree = [([], tree_rep)]
+        list_of_indexLists = []
+        tree_indices = deque()
+        
+        while tree != []:
+            (indices, sub_tree) = tree.pop(0)
+            debug(indices, prefix='indices')
+            debug(sub_tree, prefix='sub_tree')
+            list_of_indexLists.append(indices)
+            for (ordinal, subTree) in enumerate(sub_tree[1:]):
+                debug(subTree, prefix='subTree')
+                if isinstance(subTree, list):
+                    idxs = indices[:]
+                    
+                    debug(idxs, prefix='idxs')
+                    debug(ordinal, prefix='ordinal')
+                    
+                    if len(idxs) == 0:
+                        tree_indices.append([0])
+                    else:
+                        tree_indices.append(idxs)
+                    
+                    idxs.append(ordinal+1)
+                    tree.append((idxs, subTree))
+                    
+        tree_list = list(tree_indices)
+        a_list = self.flatten(tree_list)
+        c_max_depth = reduce(lambda x, y: max(x, y), a_list)
+        debug(c_max_depth)
 
     def subtree_indices(self, tree_rep):
-        tree = [([], tree_rep)]        
+        tree = [([], tree_rep)]
         list_of_indexLists = []
-        while tree != []:  
+        tree_indices = deque()
+        while tree != []:
             (indices, sub_tree) = tree.pop(0)
-            print indices
+            #print indices, sub_tree
             list_of_indexLists.append(indices)
-            for (ordinal, sst) in enumerate(sub_tree[1:]):
-                if isinstance(sst, list):
+            for (ordinal, subTree) in enumerate(sub_tree[1:]):
+                debug(ordinal)
+                debug(subTree)
+                if isinstance(subTree, list):
                     idxs = indices[:]
-                    idxs.append(ordinal+1)
-                    tree.append((idxs, sst))
 
-        
+                    debug(idxs)
+                    debug(ordinal)
+                    
+                    if len(idxs) == 0:
+                        tree_indices.append([0])
+                    else:
+                        tree_indices.append(idxs)
+                        
+                    idxs.append(ordinal+1)
+                    tree.append((idxs, subTree))
+
         return list_of_indexLists
     
+
+                
     def max_depth(self, List):
         accessorList = self.subtree_indices(List)
         a_list = self.flatten(accessorList)
@@ -115,21 +197,73 @@ class Grammar:
             self.s_Tree.insert_onto_master(cur_node, data=[x[0], x[1]])
             cur_node += 1
 
+    def constToTree(self, sentence, constituent):
+        currentNodeId = 0
         
-    def constituent_to_Tree(self, sentence, constituent, consti_depths, cur_node_id=1, last_node=None, depth=0, last_depth=0):
+        lastNode     = None
+        nodes        = deque()
+        visited      = set()
+        depths       = deque([0])
+        lengthOfList = deque([0])
+        
+        self.print_list(constituent)
+        #debug(constituent)
+        print reduce(list.__add__, map(lambda x: list(x), [y for y in constituent]))
+        #print self.list_depth(constituent)
+
+        for x in constituent:
+            ## ->[X,x,x,x,x]
+            master = self.c_Tree.insert_onto_master(currentNodeId, x)
+            nodes.appendleft(x)
+            
+            while nodes:
+                current = nodes.popleft()
+                if isinstance(current, list):
+                    newDepth = depths[0] + 1
+                    depths.appendleft(newDepth)
+                    lengthOfList.appendleft(len(current))
+                    
+                    for y in current:
+                        nodes.appendleft(y)
+                        if lastNode == None:
+                            lastNode = master
+
+                        last_Node = self.c_Tree.insert(lastNode, currentNodeId, y)
+                        lastNode = lastNode
+                        debug(lastNode)
+
+                        curLength = lengthOfList.popleft()
+                        newLength = curLength - 1
+                        if newLength != 0:
+                            lengthOfList.appendleft(newLength)
+                        elif newLength == 0:
+                            depths.pop()
+                            #lengthOfList.pop()
+                            
+                #print nodes           
+                currentNodeId += 1
+                
+        return self.c_Tree
+    
+    def constituent_to_Tree(self, sentence, constituent, consti_depths, cur_node_id=1, last_node=None, depth=0, visited=set()):
         x_const_len = 0
         r_depth     = depth
         last_node_  = None
+        visited_    = visited
         
         flat_depths = self.flatten(consti)
         for x_const in constituent:
+            print x_const
+            if repr(x_const) in visited_:
+                continue
+            
             x_const_len = len(x_const)
             
             if isinstance(x_const, list):
                 if len(x_const) >= 1:
                     r_depth += 1
                     
-                self.constituent_to_Tree(sentence, x_const, consti_depths, cur_node_id, last_node_, r_depth)
+                self.constituent_to_Tree(sentence, x_const, consti_depths, cur_node_id, last_node_, r_depth, visited)
                 
             else:
                 left, right = sentence[2][cur_node_id]
@@ -146,7 +280,6 @@ class Grammar:
                 
                 if not last_node:
                     last_node_ = self.c_Tree.insert_onto_master(cur_node_id, data)
-
                 else:
                     last_node_ = self.c_Tree.insert(last_node, cur_node_id, data)
                     
@@ -156,7 +289,8 @@ class Grammar:
                 if r_depth <= 1:
                     last_node_ = None
 
-
+            
+            visited_.add(repr(x_const))
             cur_node_id += 1
              
         return self.c_Tree
@@ -178,7 +312,7 @@ class masterNode:
         self.master_tail  = []
         self.node_id      = 0
     def __repr__(self):
-        return '<%s>' % (self.master_tail)
+        return '<%s, %d>' % (self.master_tail, self.node_id)
 
 class n_Node:
     head, left_tail, right_tail, data = None, None, None, None
@@ -289,13 +423,18 @@ class R_Tree:
         
     def insert_onto_master(self,  node_id, data):
         node = self.addNode(node_id, data)
+        if node in self.master.master_tail:
+            return False
+        
         self.master.master_tail.append(node)
+        self.master.node_id += 1
+        #print self.master
         tail_length = len(self.master.master_tail)
         if tail_length > 1:
             rightTail = self.master.master_tail[tail_length-2]
-            if hasattr(rightTail, 'right_tail'):
-                if not rightTail.right_tail:
-                    rightTail.right_tail = node
+            #if hasattr(rightTail, 'right_tail'):
+            #    if not rightTail.right_tail:
+            #        rightTail.right_tail = node
 
         return node
     
@@ -331,11 +470,11 @@ class R_Tree:
                 if current in visited:
                     continue
                 
-                print '   ' * indent_level,
                 if current:
+                    print '   ' * indent_level,
                     print '+[%s]' % (current.data)
-                else:
-                    print '+[None]'
+                #else:
+                #    print '+[None]'
                 if hasattr(current, 'right_tail'):
                     indent_level += 1
                     nodes.appendleft(current.right_tail)
@@ -418,8 +557,8 @@ if __name__ == '__main__':
     grammar.sentence_to_Tree(s)
     #c_Root = grammar.get_C_TreeRoot()
     rightTree = R_Tree()
-    consti = grammar.subtree_indices(v)
-    tree = grammar.constituent_to_Tree(s, v, consti)
+    #consti = grammar.subtree_indices(v)
+    tree = grammar.constToTree(s, v)
     tree.graphTree(tree.getMasterNode())
     grammar.cTreePrint()
 
