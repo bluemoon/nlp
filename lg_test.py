@@ -1,54 +1,31 @@
+from collections import deque
+import os
 import sys
 import pprint
+import inspect
+import glob
+import time
 
-from fsm import FSM
+
+## pretty graphs
+import networkx as nx
+import matplotlib.pyplot as plt
+
 import lg_fsm as lgFSM
 import linkGrammar
 
-import networkx as nx
-import matplotlib.pyplot as plt
-from collections import deque
-import inspect
+from structures.fsm import FSM
+from utils.list import list_functions
+
 #from nltk.sem import logic
+START_TIME = time.time()
 
 
-link_definitions ={
-    'A'  : 'Attributive',
-    'AA' : 'AA is used in the construction "How big a dog was it?"',
-    'AF' : 'Connects adjectives to verbs in cases where the adjectiveis "fronted"',
-    'B'  : 'Is used in a number of situations, involving relative clauses and questions.',
-    'D'  : 'Connects determiners to nouns',
-    'EA' : 'Connects adverbs to adjectives',
-    'EB' : 'Connects adverbs to forms of "be" before an object, adjective, or prepositional phrase',
-    'I'  : 'Connects certain verbs with infinitives',
-    'J'  : 'Connects prepositions to their objects',
-    'M'  : 'Connects nouns to various kinds of post-nominal modifiers without commas',
-    'Mv' : 'Connects verbs (and adjectives) to modifying phrases',
-    'O*' : 'Connects transitive verbs to direct or indirect objects',
-    'OX' : 'Is a special object connector used for "filler" subjects like "it" and "there"',
-    'Pp' : 'Connects forms of "have" with past participles',
-    'Pa' : 'Connects certain verbs to predicative adjectives',
-    'R'  : 'Connects nouns to relative clauses',
-    'S'  : 'Connects subject-nouns to finite verbs',
-    'Ss' : 'Noun-verb Agreement',
-    'Sp' : 'Noun-verb Agreement',
-    'Wd' : 'Declarative Sentences',
-    'Wq' : 'Questions',
-    'Ws' : 'Questions',
-    'Wj' : 'Questions',
-    'Wi' : 'Imperatives',
-    'Xi' : 'Abbreviations',
-    'Xp' : 'Periods',
-    'Xx' : 'Colons and semi-colons',
-    'Z'  : 'Connects the preposition "as" to certain verbs',
-    
-}
-
-
-###  Wd(left, x) & Ss(y, z) & (x & y) -> subject(z, y)
-###  TO(x, y) -> todo(x, y)
-###  O(x, y) -> object(x, y)
-###  Wi(x, y) -> imperative(x, y)
+### RELATIONSHIPS:
+###   Wd(left, x) & Ss(y, z) & (x & y) -> subject(z, y)
+###   TO(x, y) -> todo(x, y)
+###   O(x, y) -> object(x, y)
+###   Wi(x, y) -> imperative(x, y)
 
 
 def debug(obj, prefix=None):
@@ -64,69 +41,15 @@ def debug(obj, prefix=None):
     #    print '--> [func:%s]' % caller_method
     #else:
     #    print '[line:%d] %s' % (caller_method, from_line, repr(obj))
+    d_time = time.time() - START_TIME
     if not prefix:
-        print '[%s-%d]: ' % (caller_method, from_line),
+        print '[%f:%s-%d]: ' % (d_time, caller_method, from_line),
         pprint.pprint(obj)
     else:
-        print '[%s-%d] %s: ' % (caller_method, from_line, prefix),
+        print '[%f:%s-%d] %s: ' % (d_time, caller_method, from_line, prefix),
         pprint.pprint(obj)
 
-    #LastDebugged = caller_method
-    #print 'value: %s ' % repr(object),
-    #print 'type: %s ' % type(obj),
-    #print 'id: %s ' % id(obj),
 
-class list_functions:
-    def flatten(self, List):
-        ### take a list of varied depth
-        ### and flatten it! with no recursion
-        return reduce(list.__add__, map(lambda x: list(x), [y for y in List]))
-
-    def print_list(self, List):
-        stack = [(List, -1)]
-        while stack:
-            item, level = stack.pop()
-            if isinstance(item, list):
-                for i in reversed(item):
-                    stack.append((i, level+1))
-            else:
-                print "\t" * level, item
-
-    def max_depth(self, List):
-        accessorList = self.subtree_indices(List)
-        a_list = self.flatten(accessorList)
-        c_max_depth = reduce(lambda x, y: max(x, y), a_list)
-        if c_max_depth:
-            return max(c_max_depth)
-        
-    def subtree_indices(self, tree_rep):
-        tree = [([], tree_rep)]
-        list_of_indexLists = []
-        tree_indices = deque()
-        while tree != []:
-            (indices, sub_tree) = tree.pop(0)
-            #print indices, sub_tree
-            list_of_indexLists.append(indices)
-            for (ordinal, subTree) in enumerate(sub_tree[1:]):
-                debug(ordinal)
-                debug(subTree)
-                if isinstance(subTree, list):
-                    idxs = indices[:]
-
-                    debug(idxs)
-                    debug(ordinal)
-
-                    if len(idxs) == 0:
-                        tree_indices.append([0])
-                    else:
-                        tree_indices.append(idxs)
-
-                    idxs.append(ordinal+1)
-                    tree.append((idxs, subTree))
-
-        return list_of_indexLists
-
- 
 class grammarFSM:
     def fsm_setup(self):
         self.fsm = FSM('INIT', [])
@@ -155,19 +78,65 @@ class Grammar:
         
         ### One for constituents
         self.c_Tree = R_Tree()
+        self.owners = TheOwner()
         #self.c_root = self.c_Tree.addNode(0, 0, 0)
+
         
         ### and one for graphing
         self.G = nx.Graph()
         
                 
     def sentence_to_Tree(self, sentence, cur_node=1):
+        if not sentence:
+            return
         for x in sentence[2]:
             self.s_Tree.insert_onto_master(cur_node, data=[x[0], x[1]])
             cur_node += 1
+            
+    def lastOwner(self, nodes):
+        f_owners = filter(lambda x: isinstance(x, Owner), t_nodes)
+        return f_owners
+    
+    def const_toTree(self, constituent):        
+        t_currentNode = 0
+        t_constituent = [(constituent, -1)]
+        t_nodes       = deque()
+        t_lastnode    = None
+        
+        while t_constituent:
+            ## ->[X,x,x,x,x]
+            item, level  = t_constituent.pop()
+            if isinstance(item, list):
+                for i in reversed(item):
+                    t_constituent.append((i, level + 1))
+            else:
+                #debug(t_nodes)
+                #debug(len(t_constituent))
+                data = item
+                
+                if len(t_constituent) >= 2:
+                    if t_constituent[-1][1] - t_constituent[-2][1] >= 1:
+                        node = self.owners.addOwner(t_lastnode)
+                        t_nodes.appendleft(node)
+                        t_nodes[1].r_tail = t_nodes[0]
 
+                        node = self.owners.addObject(item, node)
+                        debug(t_nodes)
+                        #t_lastnode = t_nodes[0]
+                    else:
+                        node = self.owners.addObject(data, t_lastnode)
+                        debug(node)
+                else:
+                    node = self.owners.addObject(data, t_lastnode)
+                    #t_nodes.appendleft(node)
+                    #t_lastnode = t_nodes[0]
+                    
+                debug(t_nodes)
+                t_currentNode += 1
+            
+        return self.owners
+    
     def constToTree(self, sentence, constituent):
-
         t_currentNode = 0
         t_constituent = [(constituent, -1)]
         t_nodes       = deque()
@@ -470,11 +439,13 @@ class R_Tree:
 class Object:
     data    = None
     ownedBy = None
+    r_tail  = None
     
     def __init__(self, data):
         self.data = data
+        
     def __repr__(self):
-        return '<%s>' % (self.data)
+        return '<%s, %s>' % (self.data, self.r_tail)
     
 class Owner:
     owns    = None
@@ -483,7 +454,7 @@ class Owner:
     def __init__(self):
         self.owns = []
     def __repr__(self):
-        return '<%s>' % (self.owns)
+        return '%s' % (self.owns)
         
 class TheOwner:
     master = None
@@ -496,9 +467,11 @@ class TheOwner:
 
         obj = Object(data)
         obj.ownedBy = ownedBy
+        
         if ownedBy:
             ownedBy.owns.append(obj)
-        
+            #debug(ownedBy.owns)
+            
         return obj
     
     def addOwner(self, ownedBy=None):
@@ -509,6 +482,7 @@ class TheOwner:
         obj.ownedBy = ownedBy
         
         if ownedBy:
+            #debug(ownedBy.owns)
             ownedBy.owns.append(obj)
         
         return obj
@@ -516,29 +490,89 @@ class TheOwner:
     def getParent(self, Obj):
         return Obj.ownedBy
     
+    def travel_right(self, root=None):
+        nodes = deque()
+        if root == None:
+            root = self.master
+            
+        if isinstance(root, Owner):
+            for x in root.owns:
+                nodes.appendleft(x)
+                
+                while nodes:
+                    current = nodes.popleft()
+                    if hasattr(current, 'owns'):
+                        map(nodes.appendleft, current.owns)
+                        
+                    yield current
+
+
+
+class irc_logParser:
+    def loadLogs(self, data, limit=None):
+        "accepts data as a glob pattern"
+        files    = {}
+        output   = []
+        
+        files = glob.glob(data)
+        total_bytes = 0
+        line_count  = 0
+        
+        for _file in files:
+            total_bytes = total_bytes + os.path.getsize(_file)
+            fhandle = open(_file)
+            source_data = fhandle.readlines()
+            for c in source_data:
+                line_count += 1
+                if limit:
+                    if line_count >= limit:
+                        return output
+                    
+                data =  c[20:-1]
+                if not data:
+                    pass
+                elif data[0] == '<':
+                    userstring = data[1:].split('>')
+                    username = userstring[0]
+                    string =   userstring[1:]
+                    if len(string) > 1:
+                        string = ' '.join(string)
+                
+                    text = str(string[0][1:])
+
+                    output.append(text)
+                
+            ## end: for _file in files    
+            fhandle.close()
+        print 'log bytes: %d' % total_bytes
+        return output
+
 if __name__ == '__main__':
-    O = TheOwner()
-    O.addObject('data!')
-    owns = O.addOwner()
-    O.addObject('moredata!', owns)
+    logParser = irc_logParser()
+    log_data = logParser.loadLogs('logs/2009-08-1*', limit=100)
+    #print log_data
     
-    debug(O.master.owns)
-    
-    r = R_Tree()
     grammar = Grammar()
-    sentences = ["I've never really gotten into it."]
-    for sentence in sentences:
+    #sentences = ["I've never really gotten into it."]
+    for sentence in log_data:
         v = linkGrammar.constituents(sentence)
         s = linkGrammar.sentence(sentence)
         grammar.sentence_to_Tree(s)
         #c_Root = grammar.get_C_TreeRoot()
-        rightTree = R_Tree()
-        #consti = grammar.subtree_indices(v)
-        tree = grammar.constToTree(s, v)
+        
+        #tree = grammar.constToTree(s, v)
+        tree = grammar.const_toTree(v)
         #tree.graphTree(tree.getMasterNode())
         grammar.cTreePrint()
+        q = []
         for x in tree.travel_right():
-            print x
+            if not isinstance(x, Owner):
+                q.append(x)
+                #prefix = x.level * ' '
+                debug(x)
+            else:
+                if len(q) > 1:
+                    debug('%s owns %s' % (q[-1], x))
 
     
-    
+        #debug(q)
