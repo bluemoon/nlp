@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from collections import deque
 import os
 import sys
@@ -10,6 +11,7 @@ import time
 ## pretty graphs
 import networkx as nx
 import matplotlib.pyplot as plt
+import pylab
 
 import lg_fsm as lgFSM
 import linkGrammar
@@ -18,7 +20,7 @@ from structures.fsm import FSM
 from utils.list import list_functions
 
 #from nltk.sem import logic
-START_TIME = time.time()
+
 
 
 ### RELATIONSHIPS:
@@ -27,27 +29,71 @@ START_TIME = time.time()
 ###   O(x, y) -> object(x, y)
 ###   Wi(x, y) -> imperative(x, y)
 
+TERM_GREEN   = "\033[1;32m"
+TERM_ORANGE  = '\033[93m'
+TERM_BLUE    = '\033[94m'
+TERM_RED     = '\033[91m'
+TERM_END     = "\033[1;m"
 
-def debug(obj, prefix=None):
-    #pprint(inspect.getmembers(obj))
-    #frame = inspect.currentframe()
-    #with_caller = '[%s:%s:%d] %s'
-    #without_caller = '[%s:%d] %s'
+START_TIME = time.time()
+DEBUG_CALL_LIST = []
+DEBUG_PREFIX = u'[t:%.1f tΔ:%.3f line:%d]'
 
+def debug(obj, prefix=None):    
+    CALL_TIME = time.time()
     caller_module = inspect.stack()[1][1]
     caller_method = inspect.stack()[1][3]
     from_line     = inspect.stack()[1][2]
-    #if not LastDebugged or LastDebugged != caller_method:
-    #    print '--> [func:%s]' % caller_method
-    #else:
-    #    print '[line:%d] %s' % (caller_method, from_line, repr(obj))
-    d_time = time.time() - START_TIME
-    if not prefix:
-        print '[%f:%s-%d]: ' % (d_time, caller_method, from_line),
-        pprint.pprint(obj)
+    time_delta    = 0.0
+    function      = True
+
+
+    d_time = CALL_TIME - START_TIME
+
+    if caller_method == '<module>':
+        caller_method = caller_module
+        function = False
+
+    f_prefix = function == True and 'function' or 'module'
+    f_formatting =  '%s--> [%s:%s]%s'
+    if len(DEBUG_CALL_LIST) >= 1:
+        time_delta = time.time() - DEBUG_CALL_LIST[-1]['time']
+        if DEBUG_CALL_LIST[-1]['method'] != caller_method:
+            print f_formatting % (TERM_BLUE, f_prefix, caller_method, TERM_END)
     else:
-        print '[%f:%s-%d] %s: ' % (d_time, caller_method, from_line, prefix),
-        pprint.pprint(obj)
+        print f_formatting % (TERM_BLUE, f_prefix, caller_method, TERM_END)
+
+        
+    if not prefix:
+        n_prefix = DEBUG_PREFIX + ': '
+        print n_prefix % (d_time, time_delta,  from_line),
+        #pprint.pprint(obj)
+        print obj
+    else:
+        n_prefix = DEBUG_PREFIX + ' %s:'
+        print n_prefix% (d_time, time_delta, from_line, prefix),
+        #pprint.pprint(obj)
+        print obj
+        
+    DEBUG_CALL_LIST.append({'method':caller_method, 'time':CALL_TIME})
+
+def graphDebugTimes():
+    callIterator = 0
+    totalCalls   = []
+    totalDelta   = []
+    for x in DEBUG_CALL_LIST[1:]:
+        currentDelta = x['time'] - DEBUG_CALL_LIST[callIterator]['time']
+        if currentDelta >= 0.2:
+            totalDelta.append(currentDelta)
+            totalCalls.append(callIterator)
+            callIterator += 1
+
+    pylab.title('Calls vs. Delta time')
+    pylab.xlabel('calls over 0.2s')
+    pylab.ylabel('delta time (s)')
+
+    pylab.plot(totalCalls, totalDelta, '.')
+    pylab.savefig('debug-time-callgraph')
 
 
 class grammarFSM:
@@ -100,78 +146,30 @@ class Grammar:
     def const_toTree(self, constituent):        
         t_currentNode = 0
         t_constituent = [(constituent, -1)]
-        t_nodes       = deque()
-        t_lastnode    = None
+        t_visited     = set()
+        t_output      = []
         
         while t_constituent:
             ## ->[X,x,x,x,x]
             item, level  = t_constituent.pop()
+            if repr(item) in t_visited:
+                continue
+            
+            t_visited.add(repr(item))
+
             if isinstance(item, list):
                 for i in reversed(item):
                     t_constituent.append((i, level + 1))
             else:
-                #debug(t_nodes)
-                #debug(len(t_constituent))
-                data = item
+                if item:
+                    data = {'word' : item, 'level' : level}
+                    t_output.append(data)
                 
-                if len(t_constituent) >= 2:
-                    if t_constituent[-1][1] - t_constituent[-2][1] >= 1:
-                        node = self.owners.addOwner(t_lastnode)
-                        t_nodes.appendleft(node)
-                        t_nodes[1].r_tail = t_nodes[0]
-
-                        node = self.owners.addObject(item, node)
-                        debug(t_nodes)
-                        #t_lastnode = t_nodes[0]
-                    else:
-                        node = self.owners.addObject(data, t_lastnode)
-                        debug(node)
-                else:
-                    node = self.owners.addObject(data, t_lastnode)
-                    #t_nodes.appendleft(node)
-                    #t_lastnode = t_nodes[0]
-                    
-                debug(t_nodes)
-                t_currentNode += 1
             
-        return self.owners
-    
-    def constToTree(self, sentence, constituent):
-        t_currentNode = 0
-        t_constituent = [(constituent, -1)]
-        t_nodes       = deque()
-        while t_constituent:
-            ## ->[X,x,x,x,x]
-            item, level  = t_constituent.pop()
-            if isinstance(item, list):
-                for i in reversed(item):
-                    t_constituent.append((i, level + 1))
-            else:
-                data = [item, sentence[0][t_currentNode+1],\
-                        sentence[2][t_currentNode][0],\
-                        sentence[2][t_currentNode][1]]
-                
-                if level == 1:
-                    master = self.c_Tree.insert_onto_master(t_currentNode, data)
-                    t_nodes.appendleft(master)
-                else:
-                    previousNode = t_nodes[0]
-                    if previousNode.right_tail:
-                        lastNode = self.c_Tree.insert(previousNode.right_tail,
-                                                      t_currentNode, data, level)
-                    else:
-                        lastNode = self.c_Tree.insert(previousNode,
-                                                      t_currentNode, data, level)
-                    t_nodes.appendleft(lastNode)
-
-                    
-                ## print '%d: %s' % (level, item)
-
-                ## only add if we arent a list
-                t_currentNode += 1
             
-        return self.c_Tree
+        return t_output
     
+
     
     def cTreePrint(self):
         self.c_Tree.pp_children(self.c_Tree.getMasterNode())
@@ -445,7 +443,7 @@ class Object:
         self.data = data
         
     def __repr__(self):
-        return '<%s, %s>' % (self.data, self.r_tail)
+        return '<%s>' % (self.data)
     
 class Owner:
     owns    = None
@@ -467,13 +465,20 @@ class TheOwner:
 
         obj = Object(data)
         obj.ownedBy = ownedBy
-        
+            
         if ownedBy:
             ownedBy.owns.append(obj)
             #debug(ownedBy.owns)
             
         return obj
     
+    def insert_object(self, root, data, new=False):
+        if new:
+            return self.addNode(data)
+        else:
+            root.r_tail = self.insert(root.r_tail, new=True)
+            return root
+        
     def addOwner(self, ownedBy=None):
         if ownedBy == None:
             ownedBy = self.master
@@ -506,7 +511,28 @@ class TheOwner:
                         
                     yield current
 
+    def pp_children(self):
+        nodes = deque()
+        visited = set()
+        if not self.master:
+            return
+        
+        for x in self.master.owns:
+            indent_level = 0
+            nodes.appendleft(x)
+            while nodes:
+                current = nodes.popleft()
+                #if current in visited:
+                #    continue
+                
+                if isinstance(current, Object):
+                    print 'level: %s' % current.data['level'],
+                    print '  ' * current.data['level'],
+                    print '+[%s]' % (current.data)
 
+                if hasattr(current, 'owns'):
+                    indent_level += 1
+                    nodes.appendleft(current.owns)
 
 class irc_logParser:
     def loadLogs(self, data, limit=None):
@@ -522,12 +548,7 @@ class irc_logParser:
             total_bytes = total_bytes + os.path.getsize(_file)
             fhandle = open(_file)
             source_data = fhandle.readlines()
-            for c in source_data:
-                line_count += 1
-                if limit:
-                    if line_count >= limit:
-                        return output
-                    
+            for c in source_data:    
                 data =  c[20:-1]
                 if not data:
                     pass
@@ -541,6 +562,11 @@ class irc_logParser:
                     text = str(string[0][1:])
 
                     output.append(text)
+
+                line_count += 1
+                if limit:
+                    if line_count >= limit:
+                        return output
                 
             ## end: for _file in files    
             fhandle.close()
@@ -549,30 +575,28 @@ class irc_logParser:
 
 if __name__ == '__main__':
     logParser = irc_logParser()
-    log_data = logParser.loadLogs('logs/2009-08-1*', limit=100)
-    #print log_data
+    log_data = logParser.loadLogs('logs/2009-08-1*', limit=20)
     
-    grammar = Grammar()
-    #sentences = ["I've never really gotten into it."]
     for sentence in log_data:
+        if not sentence:
+            continue
+        
+        grammar = Grammar()
         v = linkGrammar.constituents(sentence)
         s = linkGrammar.sentence(sentence)
         grammar.sentence_to_Tree(s)
-        #c_Root = grammar.get_C_TreeRoot()
-        
-        #tree = grammar.constToTree(s, v)
         tree = grammar.const_toTree(v)
-        #tree.graphTree(tree.getMasterNode())
-        grammar.cTreePrint()
-        q = []
-        for x in tree.travel_right():
-            if not isinstance(x, Owner):
-                q.append(x)
-                #prefix = x.level * ' '
-                debug(x)
-            else:
-                if len(q) > 1:
-                    debug('%s owns %s' % (q[-1], x))
+        
+        if not tree:
+            continue
+
+        debug(TERM_GREEN + '--START SENTENCE--' + TERM_END)
+        for x in tree:
+            currentLevel = x['level']
+            debug('%s+%s' % (currentLevel * '-', x['word']))
+            
+        debug(TERM_RED + '--END SENTENCE--' + TERM_END)
 
     
         #debug(q)
+    #graphDebugTimes()
