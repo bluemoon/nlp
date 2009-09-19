@@ -115,16 +115,24 @@ class Semantics:
                 for key, value in m_value.items():
                     side = value.keys()[0]
                     name = m_value['set_state'][side].keys()[0]
-                    debug('w: %d side: %s name: %s' % (item_number, side, name))                    
+                    #debug('w: %d side: %s name: %s' % (item_number, side, name))                    
                     side_ = m_value['set_state'][side][name][1][0].keys()[0]
                     array = m_value['set_state'][side][name][1][0][side_]
-                    debug('w: %d side: %s name: %s' % (item_number, side_, array))
+                    #debug('w: %d side: %s name: %s' % (item_number, side_, array))
                     if side == 'R' and side_ == 'L':
                         previous = sentence[0][item_number-1]
                         current  = sentence[0][item_number]
                         if name == 'subj' and array == 'ref':
-                            debug('subject(%s, %s)' % (previous, current))
-                    
+                            debug('subject(%s, %s)' % (current, previous))
+                        if name == '_amod' and array == 'ref':
+                            debug('_amod(%s, %s)' % (current, previous))
+                            
+                    if side == 'L' and side_ == 'R':
+                        current_len = sentence[1][item_number]
+                        next_item = sentence[0][item_number + current_len]
+                        current_item = sentence[0][item_number]
+                        if name == 'head-question-word' and array == 'head-word':
+                            debug('head(%s, %s)' % (current_item, next_item))
                     
 
         return processed
