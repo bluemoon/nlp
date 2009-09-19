@@ -446,7 +446,7 @@ if __name__ == '__main__':
         s = linkGrammar.sentence(sentence)
         
         grammar.sentence_to_Tree(s)
-        grammar.sentenceFSM(s)
+        #grammar.sentenceFSM(s)
         tree = grammar.const_toTree(v)
 
         sem_output = semantics.handleSemantics(s)

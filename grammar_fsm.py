@@ -28,8 +28,13 @@ class SemTokenizer:
                 v = t_variable_match.group()
                 variable_split = v.split(' ')
                 prefix = variable_split[:1][0]
+
                 for variables in variable_split[1:]:
-                    t_var_output['%s-%s' % (prefix, variables)] = []
+                    #t_var_output = {'L':None,'R':None}
+                    if prefix == 'F_L':
+                        t_var_output['L'] = {variables:[]}
+                    else:
+                        t_var_output['R'] = {variables:[]}
                     if t_type_match:
                         t_grouped = t_type_match.group()
                         
@@ -42,17 +47,34 @@ class SemTokenizer:
                         temp = []
                         if len(variable_split) > 1:
                             for x_variables in variable_split[1:]:
-                                temp.append('%s-%s' % (sub_prefix, x_variables))
+                                if sub_prefix[:3] == 'F_L':
+                                    temp.append({'L': x_variables})
+                                else:
+                                    temp.append({'R': x_variables})
                     else:
                         temp = t_grouped[2:]
                         
                     if t_grouped[:2] == '= ':
-                        t_var_output['%s-%s' % (prefix, variables)].append('eq')   
-                        t_var_output['%s-%s' % (prefix, variables)].append(temp)
+                        if prefix[:3] == 'F_L':
+                            #debug(t_var_output['L'][variables])
+                            t_var_output['L'][variables].append('eq')
+                            if temp:
+                                t_var_output['L'][variables].append(temp)
+                        else:
+                            t_var_output['R'][variables].append('eq')
+                            if temp:
+                                t_var_output['R'][variables].append(temp)
+
                     else:
-                        t_var_output['%s-%s' % (prefix, variables)].append('ne')
-                        t_var_output['%s-%s' % (prefix, variables)].append(temp)
-                        
+                        if prefix[:3] == 'F_L':
+                            t_var_output['L'][variables].append('eq')
+                            if temp:
+                                t_var_output['L'][variables].append(temp)
+                        else:
+                            t_var_output['R'][variables].append('eq')
+                            if temp:
+                                t_var_output['R'][variables].append(temp)
+                                                
         #debug(t_var_output)
         return t_var_output
 
@@ -72,18 +94,41 @@ class Semantics:
     def handleSemantics(self, sentence):
         if not sentence:
             return
-        #debug(sentence)
-        flat = self.lists.flatten(sentence[3])
-        for f in flat:
-            for k, x in self.semanticRules():
-                if x[:2] == '= ':
-                    current_rule = semantic_rules[k]
-                    match_dict = self.tokens.tokenize(current_rule['match'])
-                    set_dict = self.tokens.tokenize(current_rule['set'])
-                    self.ndpda.add_transition(x[2:], match_dict , k, set_dict)
+        for k, x in self.semanticRules():
+            if x[:2] == '= ':
+                current_rule = semantic_rules[k]
+                match_dict = self.tokens.tokenize(current_rule['match'])
+                set_dict = self.tokens.tokenize(current_rule['set'])
+                self.ndpda.add_transition(x[2:], match_dict, k, set_dict)
                 
-        return self.ndpda.process_list(flat)
-            
+        processed = self.ndpda.process_list(sentence[3])
+        for item_number, dictionary in processed:
+            #debug(sentence[1][item_number], prefix='length')
+            #debug(sentence[0][item_number], prefix='left_word')
+            #try:
+            #    debug(sentence[0][item_number+sentence[1][item_number]], prefix='right_word')
+            #except:
+            #    pass
+            if not dictionary:
+                continue
+            for m_key, m_value in dictionary.items():
+                for key, value in m_value.items():
+                    side = value.keys()[0]
+                    name = m_value['set_state'][side].keys()[0]
+                    debug('w: %d side: %s name: %s' % (item_number, side, name))                    
+                    side_ = m_value['set_state'][side][name][1][0].keys()[0]
+                    array = m_value['set_state'][side][name][1][0][side_]
+                    debug('w: %d side: %s name: %s' % (item_number, side_, array))
+                    if side == 'R' and side_ == 'L':
+                        previous = sentence[0][item_number-1]
+                        current  = sentence[0][item_number]
+                        if name == 'subj' and array == 'ref':
+                            debug('subject(%s, %s)' % (previous, current))
+                    
+                    
+
+        return processed
+    
 class ExceptionFSM(Exception):
     def __init__(self, value):
         self.value = value
@@ -92,9 +137,11 @@ class ExceptionFSM(Exception):
         return `self.value`
 
 class NDPDA_FSM:
-    ""
+    """ So this is a non-deterministic FSM can be used as a
+    push-down Automata (PDA) since a PDA is a FSM + memory."""
+    
     registers = None
-    def __init__(self, initial_state, memory=None):
+    def __init__(self, initial_state):
         # Map (input_symbol, current_state) --> (action, next_state).
         self.state_transitions = {}
         # Map (current_state) --> (action, next_state).
@@ -104,7 +151,7 @@ class NDPDA_FSM:
         self.current_state = self.initial_state
         self.next_state = None
         self.action = None
-        self.memory = memory
+        self.memory = []
         self.registers = {}
 
     def reset (self):
@@ -147,38 +194,36 @@ class NDPDA_FSM:
 
 
     def process(self, input_symbol):
-        output = []
+        output = None
         self.input_symbol = input_symbol
         for transitions in self.get_transition(self.input_symbol):
             self.state, self.action, self.next_state = transitions
             if self.match_register_state(self.state):
-                #debug(self.action)
-                #debug(self.state)
-                #debug(self.registers)
-                
                 self.set_register_state(self.next_state)
-                current_out = {self.action:[self.state, self.next_state]}
-                output.append(current_out)
-            
+                if self.state:
+                    output = {self.action:{'state':self.state,'set_state':self.next_state}}
+                else:
+                    output = {self.action:{'set_state':self.next_state}}
+                break
+
             
         self.current_state = self.next_state
         self.next_state = None
 
-        return output
+        if output:
+            return output
         
     def process_list (self, input_symbols):
+        debug(input_symbols)
         output = []
+        current_item = 0
         for s in input_symbols:
-            output.append(self.process(s))
+            #debug(s)
+            runner = self.process(s)
+            output.append((current_item, runner))
+                
+            current_item += 1
             
         return output
 
-class grammarFSM:
-    def fsm_setup(self):
-        self.fsm = FSM('INIT', [])
-        self.fsm.set_default_transition(lgFSM.Error, 'INIT')
-        
-        
-    def fsm_run(self, input):
-        debug(input)
-        return self.fsm.process_list(input)
+
