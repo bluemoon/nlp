@@ -12,9 +12,10 @@ from semantic_rules import semantic_rules
 from debug import *
 
 class SemTokenizer:
+    
     def fsm_setup(self):
         self.fsm = ND_FSM('INIT')
-        
+        ## setup our regex finite state machine
         self.fsm.add_transition('<F_L$',  'INIT',  'front_left',        'INIT')
         self.fsm.add_transition('<F_R$',  'INIT',  'front_right',       'INIT')
         self.fsm.add_transition('<F_L>',  'INIT',  'front_left_close',  'INIT')
