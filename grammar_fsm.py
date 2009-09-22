@@ -219,18 +219,19 @@ class Semantics:
         self.semanticsToGraph(sentence)
         
         self.tokens.fsm_setup()
-        match_rules = []
-        set_rules   = []
+        
         
         for k, x in self.semanticRules():
+            match_rules = {}
+            set_rules   = {}
             if x[:2] == '= ':
                 current_rule = semantic_rules[k]
                 for m in current_rule['match']:
                     tokenizer_out = self.tokens.fsm_tokenizer(m)
-                    match_rules.append(tokenizer_out)
+                    match_rules[k] = tokenizer_out
                 for n in current_rule['set']:
                     tokenizer_out = self.tokens.fsm_tokenizer(n)
-                    set_rules.append(tokenizer_out)
+                    set_rules[k] = tokenizer_out
                     
                 #match_dict = self.tokens.tokenize(m[0])
                 #set_dict = self.tokens.tokenize(current_rule['set'])
@@ -306,7 +307,7 @@ class ND_FSM:
         
         
     def process_list (self, input_symbols):
-        debug(input_symbols)
+        #debug(input_symbols)
         output = []
         current_item = 0
         for s in input_symbols:
@@ -343,90 +344,75 @@ class NDPDA_FSM:
         self.L_registers = {}
         self.R_registers = {}
         
+        self.fsm = FSM('INIT')
+        self.fsm.add_transistion('front_left',  'INIT', None, 'FRONT_L')
+        self.fsm.add_transistion('front_right', 'INIT', None, 'FRONT_R')
+        
+        
     def reset (self):
         self.current_state = self.initial_state
         self.input_symbol = None
         
     def set_register_state(self, in_state):
-        for key, value in in_state.items():
-            head = value.keys()[0]
-            if len(value[head]) >= 1:
-                if key == 'R':
-                    if value[head][0] == 'eq':
-                        if isinstance(value[head][1], list):
-                            self.R_registers[head] = value[head][1]
-                        else:
-                            self.R_registers[head] = [value[head][1]]
-                    elif value[head][0] == 'ap':
-                        if self.R_registers.has_key(head):
-                            self.R_registers[head].append(value[head][1])
-                        else:
-                            self.R_registers[head] = value[head][1]
-                        
-                if key == 'L':
-                    if value[head][0] == 'eq':
-                        if isinstance(value[head][1], list):
-                            self.L_registers[head] = value[head][1]
-                        else:
-                            self.L_registers[head] = [value[head][1]]
-                    elif value[head][0] == 'ap':
-                        if self.L_registers.has_key(head):
-                            self.L_registers[head].append(value[head][1])
-                        else:
-                            self.L_registers[head] = value[head][1]
-
-            debug(self.L_registers)
-            debug(self.R_registers)
-            
-            if self.registers.has_key(key):
-                if not self.registers[key] == value:
-                    self.registers[key] = value
-            else:
-                self.registers[key] = value
+        debug(in_state)
 
     
     def match_register_state(self, in_state):
-        matches = True
-        for key, value in in_state.items():
-            head = value.keys()[0]
-            if head == 'str':
-                head_re = re.compile(value[head][1][0]['N'][0])
-                head_search = head_re.search(self.memory[0])
-                if head_search:
-                    debug(head_search.group())
-                    matches = True
-                    break
+        debug(in_state)
+        head = in_state.keys()[0]
+        left_temp_vars = []
+        right_temp_vars = []
+        action = ''
+        current_state = ''
+        side = ''
+        for items in in_state[head]:
+            if items[0] == 'front_right' and current_state == '':
+               current_state = 'front_right'
+               side = 'right'
+            if items[0] == 'front_left' and current_state == '':
+               current_state = 'front_left'
+               side = 'left'
+               
+            if current_state == 'front_right' or current_state == 'front_right' and items[0] == 'tag':
+                variable = items[1]
+                if variable[:1] == '>':
+                    current_state = ''
+                    left_temp_vars.append(variable[1:])
                 else:
-                    matches = False
+                    left_temp_vars.append(variable)
+
+            if items[0] == 'eq':
+                action = 'eq'
+                current_state = 'past_action'
                 
-            if len(value[head]) >= 1:
-                if key == 'R' and self.R_registers.has_key(head):
-                    if value[head][0] == 'eq':
-                        debug(self.R_registers)
-                        debug(value[head])
-                        if self.R_registers[head]:
-                            print 'yeah'
+            if items[0] == 'ne':
+                action = 'ne'
+                current_state = 'past_action'
+                
+            if items[0] == 'ap':
+                action = 'ap'
+                current_state = 'past_action'
+                
+            if current_state == 'past_action' and (items[0] == 'tag' or items[0] == 'front_right'):
+                variable = items[1]
+                if variable[:1] == '>':
+                    right_temp_vars.append(variable[:1])
+                else:
+                    right_temp_vars.append(variable)
 
-                        
-                if key == 'L' and self.L_registers.has_key(head):
-                    if value[head][0] == 'eq':
-                        debug(self.L_registers)
-                        debug(value[head])
-                        if self.L_registers[head] == value[head][1]:
-                            print 'yeah'
-                        
-                    
-            debug(self.L_registers, prefix='L registers')
-            debug(self.R_registers, prefix='R registers')
-            #self._match_variable(value)
-            #if self.registers.has_key(key):
-            #    if not self.registers[key] == value:
-            #        matches = False
-            #else:
-            #    matches = False
+        for left in left_temp_vars:
+            if side == 'right':
+                if action == 'eq':
+                    self.R_registers[left] = right_temp_vars
+                if action == 'ap':
+                    self.R_registers[left].append(right_temp_vars)
+            if side == 'left':
+                if action == 'eq':
+                    self.L_registers[left] = right_temp_vars
+                if action == 'ap':
+                    self.L_registers[left].append(right_temp_vars)
 
-        return matches
-    
+            
         
     def add_transition(self, input_symbol, state, action=None, next_state=None):
         #debug(state)
