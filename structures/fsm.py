@@ -113,6 +113,7 @@ class FSM:
         self.input_symbol = None
         self.counter = 0
 
+
     def add_transition (self, input_symbol, state, action=None, next_state=None):
 
         """This adds a transition that associates:
@@ -227,8 +228,9 @@ class FSM:
         self.state_changes.append(self.next_state)
         self.next_state = None
         self.counter += 1
+        
         if self.action is not None:
-            return self.action (self)
+            return self.action(self)
         
 
 

@@ -12,11 +12,29 @@ from semantic_rules import semantic_rules
 from debug import *
 
 class SemTokenizer:
+    def fsm_setup(self):
+        self.fsm = ND_FSM('INIT')
+        
+        self.fsm.add_transition('<F_L$',  'INIT',  'front_left',        'INIT')
+        self.fsm.add_transition('<F_R$',  'INIT',  'front_right',       'INIT')
+        self.fsm.add_transition('<F_L>',  'INIT',  'front_left_close',  'INIT')
+        self.fsm.add_transition('<F_R>',  'INIT',  'front_right_close', 'INIT')
+        
+        self.fsm.add_transition('([a-zA-Z_-]|[$])+' , 'INIT', 'tag', 'INIT')
+        self.fsm.add_transition('!=',         'INIT', 'ne',         'INIT')
+        self.fsm.add_transition('=',          'INIT', 'eq',         'INIT')
+        self.fsm.add_transition('\+=',        'INIT', 'ap',         'INIT')
+        self.fsm.add_transition('%',          'INIT', 'percent',   'INIT')
+        
+    def fsm_tokenizer(self, obj):
+        split_space = obj.split(' ')
+        return self.fsm.process_list(split_space)
+        
     def tokenize(self, obj):
         t_head_type   = None
         t_head_left   = '<F_L'
         t_head_right  = '<F_R'
-        t_variable    = re.compile('((\|%)|[a-zA-Z_-])+')
+        t_variable    = re.compile("(\s|[a-zA-Z_-]|[\%\|$\+]\')+")
         t_type        = re.compile('(=|!=|\+=).*')
         t_var_output  = {}
 
@@ -28,6 +46,7 @@ class SemTokenizer:
         for x_obj in obj:
             t_variable_match = t_variable.search(x_obj)
             t_type_match = t_type.search(x_obj)
+            
             if t_variable_match:
                 v = t_variable_match.group()
                 variable_split = v.split(' ')
@@ -57,8 +76,11 @@ class SemTokenizer:
                                 elif sub_prefix[:3] == 'F_R':
                                     temp.append({'R': x_variables})
                                 else:
-                                    debug(sub_prefix)
-                                    debug(x_variables)
+                                    if x_variables == '':
+                                        temp.append({'N':sub_prefix})
+                                    else:
+                                        temp.append({'N':x_variables})
+
                         elif len(variable_split) == 1:
                             temp.append({'N': variable_split})
 
@@ -95,6 +117,7 @@ class SemTokenizer:
                             t_var_output['R'][variables].append('ap')
                             if temp:
                                 t_var_output['R'][variables].append(temp)
+
         #debug(t_var_output)
         return t_var_output
 
@@ -113,9 +136,14 @@ class Semantics:
                     yield k, x
                     
     def semanticsToGraph(self, sentence):
+        debug(sentence)
+        
+        nxG = nx.Graph()
+
         item_counter = 0
         turing = sentence[0]
         if not sentence:
+            nxG.clear()
             return
         
         for word in sentence[0]:
@@ -126,85 +154,90 @@ class Semantics:
             else:
                 continue
 
+            nxG.add_node(word)
+            nxG.add_node(next_word)
+
             self.graph.add_node(word, ignore_dupes=True)
             self.graph.add_node(next_word, ignore_dupes=True)
+            
+            nxG.add_edge(word, next_word)
             self.graph.add_edge(word, next_word)
             
             #G.add_edge(word, next_word)
 
             try:
                 right_index = item_counter + sentence[1][item_counter]
+                tag = sentence[3][item_counter]
             except:
                 continue
-            if len(turing) > right_index:
-                right_word = turing[right_index]
+            if len(sentence[3]) > right_index:
+                right_word = sentence[0][right_index]
             else:
                 continue
             
-            #debug('%s <- %s -> %s' % (prev_word, current_word, right_word))
-            #G.add_edge(word, right_word)
+            nxG.add_node(tag)
+            nxG.add_edge(tag, word)
+            nxG.add_edge(tag, next_word)
+            self.graph.add_node(tag, ignore_dupes=True)
+            self.graph.add_edge(tag, word)
+            self.graph.add_edge(tag, next_word)
+
+            #self.graph.add_node(right_word, ignore_dupes=True)
+            #self.graph.add_edge(word, right_word)
             
-            self.graph.add_node(right_word, ignore_dupes=True)
-            self.graph.add_edge(word, right_word)
-            
-            
-            
-        first_word = sentence[0][0]
+
+
+
+        pos = nx.spring_layout(nxG, iterations=40)
+
+        #font = {'fontname'   : 'Helvetica',
+        #        'color'      : 'k',
+        #        'fontweight' : 'bold',
+        #        'fontsize'   : 14}
+
         
-        #pos = nx.graphviz_layout(G, prog="dot")
-        #pos = nx.spring_layout(G, iterations=40)
-        #nx.draw_networkx_nodes(G, pos, node_size=800,
+        ### draw up the nodes
+        # nx.draw_networkx_nodes(nxG, pos, node_size=800,
         #                       node_color="#A0CBE2", edge_cmap=plt.cm.Blues)
-        #nx.draw_networkx_edges(G, pos, width=1.2, alpha=0.5,
+        #nx.draw_networkx_edges(nxG, pos, width=1.2, alpha=0.5,
         #                       edge_color='b', style='dashed')
-        #nx.draw_networkx_labels(G,pos,font_size=7, font_family='sans-serif')
-        #nx.draw(G, pos, node_color='#A0CBE2', width=1.2, edge_cmap=plt.cm.Blues)
+        #nx.draw_networkx_labels(nxG,pos,font_size=7, font_family='sans-serif')
 
-        #plt.axis('off')
-        #plt.title("Analysis of Tree", font)
-        #plt.savefig("dots/%s.png" % (time.time()), dpi=75)
+        plt.axis('off')
+        plt.savefig("c_tree_structure.png")
+        
+        nxG.clear()
 
+        first_word = sentence[0][0]
+        debug(self.graph.dfs(first_word))
+        
     def handleSemantics(self, sentence):
         if not sentence:
             return
 
         self.ndpda = NDPDA_FSM('INIT', sentence[0])
         self.semanticsToGraph(sentence)
-
+        
+        self.tokens.fsm_setup()
+        match_rules = []
+        set_rules   = []
+        
         for k, x in self.semanticRules():
             if x[:2] == '= ':
                 current_rule = semantic_rules[k]
-                match_dict = self.tokens.tokenize(current_rule['match'])
-                set_dict = self.tokens.tokenize(current_rule['set'])
-                self.ndpda.add_transition(x[2:], match_dict, k, set_dict)
+                for m in current_rule['match']:
+                    tokenizer_out = self.tokens.fsm_tokenizer(m)
+                    match_rules.append(tokenizer_out)
+                for n in current_rule['set']:
+                    tokenizer_out = self.tokens.fsm_tokenizer(n)
+                    set_rules.append(tokenizer_out)
+                    
+                #match_dict = self.tokens.tokenize(m[0])
+                #set_dict = self.tokens.tokenize(current_rule['set'])
+                self.ndpda.add_transition(x[2:], match_rules, k, set_rules)
                 
         processed = self.ndpda.process_list(sentence[3])
-        #for item_number, dictionary in processed:
-        #    if not dictionary:
-        #        continue
-        #    for m_key, m_value in dictionary.items():
-        #        for key, value in m_value.items():
-        #            side = value.keys()[0]
-        #            name = m_value['set_state'][side].keys()[0]
-        #            #debug('w: %d side: %s name: %s' % (item_number, side, name))                    
-        #            side_ = m_value['set_state'][side][name][1][0].keys()[0]
-        #            array = m_value['set_state'][side][name][1][0][side_]
-        #            #debug('w: %d side: %s name: %s' % (item_number, side_, array))
-        #            if side == 'R' and side_ == 'L':
-        #                previous = sentence[0][item_number-1]
-        #                current  = sentence[0][item_number]
-        #                debug('%s(%s, %s)' % (name, current, previous))#
-        #
-        #                    
-        #            if side == 'L' and side_ == 'R':
-        #                current_len = sentence[1][item_number]
-        #                next_item = sentence[0][item_number + current_len]
-        #                current_item = sentence[0][item_number]
-        #                #if name == 'head-question-word' and array == 'head-word':
-        #                debug('%s(%s, %s)' % (array, current_item, next_item))
-                        
-                    
-
+        
         return processed
     
 class ExceptionFSM(Exception):
@@ -213,13 +246,87 @@ class ExceptionFSM(Exception):
 
     def __str__(self):
         return `self.value`
+    
+class ND_FSM:
+    """ So this is a non-deterministic FSM can be used as a
+    push-down Automata (PDA) since a PDA is a FSM + memory."""
+    
+    def __init__(self, initial_state, memory=[]):
+        # Map (input_symbol, current_state) --> (action, next_state).
+        self.state_transitions = {}
+        # Map (current_state) --> (action, next_state).
+
+        self.input_symbol = None
+        self.initial_state = initial_state
+        self.current_state = self.initial_state
+        self.next_state = None
+        self.action = None
+        self.memory = memory
+        
+    def reset (self):
+        self.current_state = self.initial_state
+        self.input_symbol = None
+        
+    def add_transition(self, input_symbol, state, action=None, next_state=None):
+        #debug(state)
+        if next_state is None:
+            next_state = state
+            
+        self.state_transitions[input_symbol] = (state, action, next_state)
+        
+    def get_transition(self, input_symbol):
+        for regex_transitions in self.state_transitions:
+            re_to_match = re.compile(regex_transitions)
+            re_search = re_to_match.match(input_symbol)
+            if re_search:
+                #debug(self.current_state)
+                #debug(self.state_transitions[regex_transitions])
+                #if self.state_transitions[regex_transitions][0] == self.current_state:
+                yield self.state_transitions[regex_transitions]
+
+
+    def process(self, input_symbol):
+        output = None
+        #debug(self.current_state)
+        self.input_symbol = input_symbol
+        for transitions in self.get_transition(self.input_symbol):
+            self.state, self.action, self.next_state = transitions
+            
+            #self.memory.append(input_symbol)
+            output = (self.action, input_symbol)
+
+            
+        self.current_state = self.next_state
+        self.next_state = self.initial_state
+
+        #self.memory.pop(0)
+        if output:
+            return output
+        
+        
+        
+    def process_list (self, input_symbols):
+        debug(input_symbols)
+        output = []
+        current_item = 0
+        for s in input_symbols:
+            #debug(s)
+            runner = self.process(s)
+            output.append(runner)
+                
+            current_item += 1
+            
+        return output
+
+
+
 
 class NDPDA_FSM:
     """ So this is a non-deterministic FSM can be used as a
     push-down Automata (PDA) since a PDA is a FSM + memory."""
     
     registers = None
-    def __init__(self, initial_state, memory):
+    def __init__(self, initial_state, memory=[]):
         # Map (input_symbol, current_state) --> (action, next_state).
         self.state_transitions = {}
         # Map (current_state) --> (action, next_state).
@@ -243,11 +350,13 @@ class NDPDA_FSM:
     def set_register_state(self, in_state):
         for key, value in in_state.items():
             head = value.keys()[0]
-            #debug(value)
             if len(value[head]) >= 1:
                 if key == 'R':
                     if value[head][0] == 'eq':
-                        self.R_registers[head] = value[head][1]
+                        if isinstance(value[head][1], list):
+                            self.R_registers[head] = value[head][1]
+                        else:
+                            self.R_registers[head] = [value[head][1]]
                     elif value[head][0] == 'ap':
                         if self.R_registers.has_key(head):
                             self.R_registers[head].append(value[head][1])
@@ -256,7 +365,10 @@ class NDPDA_FSM:
                         
                 if key == 'L':
                     if value[head][0] == 'eq':
-                        self.L_registers[head] = value[head][1]
+                        if isinstance(value[head][1], list):
+                            self.L_registers[head] = value[head][1]
+                        else:
+                            self.L_registers[head] = [value[head][1]]
                     elif value[head][0] == 'ap':
                         if self.L_registers.has_key(head):
                             self.L_registers[head].append(value[head][1])
@@ -277,51 +389,52 @@ class NDPDA_FSM:
         matches = True
         for key, value in in_state.items():
             head = value.keys()[0]
-            #debug(value)
+            if head == 'str':
+                head_re = re.compile(value[head][1][0]['N'][0])
+                head_search = head_re.search(self.memory[0])
+                if head_search:
+                    debug(head_search.group())
+                    matches = True
+                    break
+                else:
+                    matches = False
+                
             if len(value[head]) >= 1:
-                if key == 'R':
+                if key == 'R' and self.R_registers.has_key(head):
                     if value[head][0] == 'eq':
-                        if self.R_registers[head] == value[head][1]:
+                        debug(self.R_registers)
+                        debug(value[head])
+                        if self.R_registers[head]:
                             print 'yeah'
-                        else:
-                            pass
+
                         
-                    elif value[head][0] == 'ap':
-                        pass
-                        
-                if key == 'L':
+                if key == 'L' and self.L_registers.has_key(head):
                     if value[head][0] == 'eq':
+                        debug(self.L_registers)
+                        debug(value[head])
                         if self.L_registers[head] == value[head][1]:
                             print 'yeah'
-                    elif value[head][0] == 'ap':
-                        pass
+                        
                     
             debug(self.L_registers, prefix='L registers')
             debug(self.R_registers, prefix='R registers')
             #self._match_variable(value)
-            if self.registers.has_key(key):
-                if not self.registers[key] == value:
-                    matches = False
-            else:
-                matches = False
+            #if self.registers.has_key(key):
+            #    if not self.registers[key] == value:
+            #        matches = False
+            #else:
+            #    matches = False
 
         return matches
     
-    def _match_variable(self, LR):
-        for key, value in LR.items():
-            if key == 'str':
-                if len(value) > 1:
-                    #debug(value)
-                    regex = re.compile(value[1][0]['N'])
-                    r_search = regex.search(self.memory[0])
-                    if r_search:
-                        print r_search.group()
         
     def add_transition(self, input_symbol, state, action=None, next_state=None):
         #debug(state)
         if next_state is None:
             next_state = state
             
+        #debug(state)
+        #debug(input_symbol)
         self.state_transitions[input_symbol] = (state, action, next_state)
         
     def get_transition(self, input_symbol):
@@ -350,11 +463,12 @@ class NDPDA_FSM:
             
         self.current_state = self.next_state
         self.next_state = None
-
+        
+        self.memory.pop(0)
         if output:
             return output
         
-        self.memory.pop()
+        
         
     def process_list (self, input_symbols):
         debug(input_symbols)
