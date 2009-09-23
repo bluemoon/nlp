@@ -18,15 +18,26 @@ manageable.
 
 File Overview
 =============
-- debug.py          -- for the pretty print debug function
-- grammar_fsm.py    -- contains the FSM for the semantics
-- help.py           -- will contain help in the future
-- lg_fsm.py         -- the old finite state machine for link grammar
-- lg_py.c           -- the C module
-- lg_test.py        -- the core file currently
-- semantic_rules.py -- contains all the semantic rules
-- semantics.py      -- parser to retrieve the semantic rules from RelEx
-- setup.py          -- to compile the C module
+debug.py          -- for the pretty print debug function
+grammar_fsm.py    -- contains the FSM for the semantics
+help.py           -- will contain help in the future
+lg_fsm.py         -- the old finite state machine for link grammar
+lg_py.c           -- the C module
+lg_test.py        -- the core file currently
+semantic_rules.py -- contains all the semantic rules
+semantics.py      -- parser to retrieve the semantic rules from RelEx
+setup.py          -- to compile the C module
+
+TO-DO
+=====
+- [ ] Implement part of speech tagger
+- [ ] Hobbs anaphora [Hobbs1976]_
+
+
+
+
+
+[Hobbs1976] http://code.google.com/p/hobbs-algorithm/source/browse/#svn/trunk
 
 License
 =======

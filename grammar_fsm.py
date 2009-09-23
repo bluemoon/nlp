@@ -12,7 +12,6 @@ from semantic_rules import semantic_rules
 from debug import *
 
 class SemTokenizer:
-    
     def fsm_setup(self):
         self.fsm = ND_FSM('INIT')
         ## setup our regex finite state machine
@@ -31,97 +30,6 @@ class SemTokenizer:
         split_space = obj.split(' ')
         return self.fsm.process_list(split_space)
         
-    def tokenize(self, obj):
-        t_head_type   = None
-        t_head_left   = '<F_L'
-        t_head_right  = '<F_R'
-        t_variable    = re.compile("(\s|[a-zA-Z_-]|[\%\|$\+]\')+")
-        t_type        = re.compile('(=|!=|\+=).*')
-        t_var_output  = {}
-
-        if obj[:4] == t_head_left:
-            t_head_type = 'left'
-        elif obj[:4] == t_head_right:
-            t_head_type = 'right'
-
-        for x_obj in obj:
-            t_variable_match = t_variable.search(x_obj)
-            t_type_match = t_type.search(x_obj)
-            
-            if t_variable_match:
-                v = t_variable_match.group()
-                variable_split = v.split(' ')
-                prefix = variable_split[:1][0]
-
-                for variables in variable_split[1:]:
-                    #t_var_output = {'L':None,'R':None}
-                    if prefix == 'F_L':
-                        t_var_output['L'] = {variables:[]}
-                    elif prefix == 'F_R':
-                        t_var_output['R'] = {variables:[]}
-                        
-                    if t_type_match:
-                        t_grouped = t_type_match.group()
-                        
-                    #debug(t_grouped[2:])
-                    t_submatch = t_variable.search(t_grouped[2:])
-                    if t_submatch:
-                        v = t_submatch.group()
-                        variable_split = v.split(' ')
-                        sub_prefix = variable_split[:1][0]
-                        temp = []
-                        if len(variable_split) > 1:
-                            for x_variables in variable_split[1:]:
-                                if sub_prefix[:3] == 'F_L':
-                                    temp.append({'L': x_variables})
-                                elif sub_prefix[:3] == 'F_R':
-                                    temp.append({'R': x_variables})
-                                else:
-                                    if x_variables == '':
-                                        temp.append({'N':sub_prefix})
-                                    else:
-                                        temp.append({'N':x_variables})
-
-                        elif len(variable_split) == 1:
-                            temp.append({'N': variable_split})
-
-                    else:
-                        temp = t_grouped[2:]
-                        
-                    if t_grouped[:2] == '= ':
-                        if prefix[:3] == 'F_L':
-                            #debug(t_var_output['L'][variables])
-                            t_var_output['L'][variables].append('eq')
-                            if temp:
-                                t_var_output['L'][variables].append(temp)
-                        else:
-                            t_var_output['R'][variables].append('eq')
-                            if temp:
-                                t_var_output['R'][variables].append(temp)
-
-                    elif t_grouped[:2] == '!=':
-                        if prefix[:3] == 'F_L':
-                            t_var_output['L'][variables].append('ne')
-                            if temp:
-                                t_var_output['L'][variables].append(temp)
-                        else:
-                            t_var_output['R'][variables].append('ne')
-                            if temp:
-                                t_var_output['R'][variables].append(temp)
-
-                    elif t_grouped[:2] == '+=':
-                        if prefix[:3] == 'F_L':
-                            t_var_output['L'][variables].append('ap')
-                            if temp:
-                                t_var_output['L'][variables].append(temp)
-                        else:
-                            t_var_output['R'][variables].append('ap')
-                            if temp:
-                                t_var_output['R'][variables].append(temp)
-
-        #debug(t_var_output)
-        return t_var_output
-
 
 class Semantics:
     def __init__(self):
@@ -225,6 +133,7 @@ class Semantics:
         for k, x in self.semanticRules():
             match_rules = {}
             set_rules   = {}
+            
             if x[:2] == '= ':
                 current_rule = semantic_rules[k]
                 for m in current_rule['match']:
