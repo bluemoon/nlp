@@ -35,6 +35,7 @@ TO-DO
 - [/] Tree printer
 - [x] Generic sentence container
 - [ ] Rule engine
+-  -- [ ] "Feature paths"
 - [ ] Implement part of speech tagger
 - [ ] Word tense tagger
 - [ ] Emoticon tagger
