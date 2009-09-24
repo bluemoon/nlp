@@ -9,6 +9,7 @@ from structures.fsm import FSM
 from structures.atoms import Atoms
 from utils.list import list_functions
 from semantic_rules import semantic_rules
+from sentence import tag as Tag
 from debug import *
 
 class SemTokenizer:
@@ -37,25 +38,21 @@ class Semantics:
 
         self.tokens = SemTokenizer()
         self.graph = Atoms()
-    
+        self.nxG = nx.Graph()
+        
     def semanticRules(self):
         for k, v in semantic_rules.items():
             if 'regex' in v:
                 for x in v['regex']:
                     yield k, x
                     
-    def semanticsToGraph(self, sentence):
-        #debug(sentence)
-        
-        nxG = nx.Graph()
-
+    def semanticsToAtoms(self, sentence):
         item_counter = 0
-        turing = sentence[0]
+        turing = sentence.words
         if not sentence:
-            nxG.clear()
             return
         
-        for word in sentence[0]:
+        for word in sentence.words:
             next_index = item_counter + 1
             if len(turing) > next_index:
                 next_word  = turing[next_index]
@@ -63,63 +60,35 @@ class Semantics:
             else:
                 continue
 
-            nxG.add_node(word)
-            nxG.add_node(next_word)
-
             self.graph.add_node(word, ignore_dupes=True)
             self.graph.add_node(next_word, ignore_dupes=True)
             
-            nxG.add_edge(word, next_word)
             self.graph.add_edge(word, next_word)
             
-            #G.add_edge(word, next_word)
-
             try:
-                right_index = item_counter + sentence[1][item_counter]
-                tag = sentence[3][item_counter]
+                right_index = item_counter + sentence.spans[item_counter]
+                tag = sentence.tags[item_counter]
+                current = Tag(sentence.words[item_counter], sentence.words[right_index], tag)
+                sentence.tag_set.append(current)
             except:
+                current = Tag(sentence.words[item_counter], None, tag)
+                sentence.tag_set.append(current)
                 continue
-            if len(sentence[3]) > right_index:
-                right_word = sentence[0][right_index]
+            
+            if len(sentence.tags) > right_index:
+                right_word = sentence.words[right_index]
             else:
                 continue
             
-            nxG.add_node(tag)
-            nxG.add_edge(tag, word)
-            nxG.add_edge(tag, next_word)
+            self.nxG.add_edge(tag, word)
+            self.nxG.add_edge(tag, next_word)
             self.graph.add_node(tag, ignore_dupes=True)
             self.graph.add_edge(tag, word)
             self.graph.add_edge(tag, next_word)
 
-            #self.graph.add_node(right_word, ignore_dupes=True)
-            #self.graph.add_edge(word, right_word)
-            
 
+        return self.graph
 
-
-        pos = nx.spring_layout(nxG, iterations=40)
-
-        #font = {'fontname'   : 'Helvetica',
-        #        'color'      : 'k',
-        #        'fontweight' : 'bold',
-        #        'fontsize'   : 14}
-
-        
-        ### draw up the nodes
-        # nx.draw_networkx_nodes(nxG, pos, node_size=800,
-        #                       node_color="#A0CBE2", edge_cmap=plt.cm.Blues)
-        #nx.draw_networkx_edges(nxG, pos, width=1.2, alpha=0.5,
-        #                       edge_color='b', style='dashed')
-        #nx.draw_networkx_labels(nxG,pos,font_size=7, font_family='sans-serif')
-
-        plt.axis('off')
-        plt.savefig("c_tree_structure.png")
-        
-        nxG.clear()
-
-        first_word = sentence[0][0]
-        debug(self.graph.dfs(first_word))
-        
     def handleSemantics(self, sentence):
         if not sentence:
             return

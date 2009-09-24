@@ -21,10 +21,11 @@ from structures.fsm import FSM
 from utils.list import list_functions
 from tree_utils import Print
 from semantic_rules import semantic_rules
+from sentence import sentence
+
 #from nltk.sem import logic
 from grammar_fsm import Semantics
 from grammar_fsm import NDPDA_FSM
-
 
 
 ### RELATIONSHIPS:
@@ -451,7 +452,6 @@ if __name__ == '__main__':
             p.print_diagram(s)
             
         grammar.sentence_to_Tree(s)
-        #grammar.sentenceFSM(s)
         tree = grammar.const_toTree(v)
         
         sem_output = semantics.handleSemantics(s)
