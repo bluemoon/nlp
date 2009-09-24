@@ -6,7 +6,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 from structures.fsm import FSM
-from structures.graph import Graph
+from structures.atoms import Atoms
 from utils.list import list_functions
 from semantic_rules import semantic_rules
 from debug import *
@@ -36,7 +36,7 @@ class Semantics:
         self.lists = list_functions()
 
         self.tokens = SemTokenizer()
-        self.graph = Graph()
+        self.graph = Atoms()
     
     def semanticRules(self):
         for k, v in semantic_rules.items():
@@ -45,7 +45,7 @@ class Semantics:
                     yield k, x
                     
     def semanticsToGraph(self, sentence):
-        debug(sentence)
+        #debug(sentence)
         
         nxG = nx.Graph()
 
@@ -255,8 +255,8 @@ class NDPDA_FSM:
         self.R_registers = {}
         
         self.fsm = FSM('INIT')
-        self.fsm.add_transistion('front_left',  'INIT', None, 'FRONT_L')
-        self.fsm.add_transistion('front_right', 'INIT', None, 'FRONT_R')
+        self.fsm.add_transition('front_left',  'INIT', None, 'FRONT_L')
+        self.fsm.add_transition('front_right', 'INIT', None, 'FRONT_R')
         
         
     def reset (self):
@@ -264,65 +264,12 @@ class NDPDA_FSM:
         self.input_symbol = None
         
     def set_register_state(self, in_state):
-        debug(in_state)
-
+        #debug(in_state)
+        pass
     
     def match_register_state(self, in_state):
-        debug(in_state)
-        head = in_state.keys()[0]
-        left_temp_vars = []
-        right_temp_vars = []
-        action = ''
-        current_state = ''
-        side = ''
-        for items in in_state[head]:
-            if items[0] == 'front_right' and current_state == '':
-               current_state = 'front_right'
-               side = 'right'
-            if items[0] == 'front_left' and current_state == '':
-               current_state = 'front_left'
-               side = 'left'
-               
-            if current_state == 'front_right' or current_state == 'front_right' and items[0] == 'tag':
-                variable = items[1]
-                if variable[:1] == '>':
-                    current_state = ''
-                    left_temp_vars.append(variable[1:])
-                else:
-                    left_temp_vars.append(variable)
-
-            if items[0] == 'eq':
-                action = 'eq'
-                current_state = 'past_action'
-                
-            if items[0] == 'ne':
-                action = 'ne'
-                current_state = 'past_action'
-                
-            if items[0] == 'ap':
-                action = 'ap'
-                current_state = 'past_action'
-                
-            if current_state == 'past_action' and (items[0] == 'tag' or items[0] == 'front_right'):
-                variable = items[1]
-                if variable[:1] == '>':
-                    right_temp_vars.append(variable[:1])
-                else:
-                    right_temp_vars.append(variable)
-
-        for left in left_temp_vars:
-            if side == 'right':
-                if action == 'eq':
-                    self.R_registers[left] = right_temp_vars
-                if action == 'ap':
-                    self.R_registers[left].append(right_temp_vars)
-            if side == 'left':
-                if action == 'eq':
-                    self.L_registers[left] = right_temp_vars
-                if action == 'ap':
-                    self.L_registers[left].append(right_temp_vars)
-
-            
+        #debug(in_state)
+        pass
         
     def add_transition(self, input_symbol, state, action=None, next_state=None):
         #debug(state)

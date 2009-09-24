@@ -8,7 +8,7 @@ static PyObject *sentence(PyObject *self, PyObject *args){
     Parse_Options opts;
     Sentence      sent;
     Linkage       linkage;
-    //CNode *       cn;
+    Linkage       sub_linkage;
 
     /// Link counts
     int   num_linkages;
@@ -17,9 +17,9 @@ static PyObject *sentence(PyObject *self, PyObject *args){
     ///  Index's for the iterators
     int   link_idx;
     int   word_idx;
-    long   span;
     int   num_words;
-    int   sub_linkages;
+    long   span;
+    long   sub_linkages;
 
     const char *text;
     const char *d_output;
@@ -29,15 +29,17 @@ static PyObject *sentence(PyObject *self, PyObject *args){
     PyObject *word2_list;
     PyObject *span_list;
     PyObject *temp;
+    PyObject *sublinkage_list;
 
     output_list = PyList_New(0);
     word_list   = PyList_New(0);
     word2_list  = PyList_New(0);
+    sublinkage_list = PyList_New(0);
 
     span_list = PyList_New(0);
 
     if (!PyArg_ParseTuple(args, "s", &text))
-        return NULL;
+    return NULL;
 
     opts = parse_options_create();
     parse_options_set_verbosity(opts, -1);
@@ -46,9 +48,9 @@ static PyObject *sentence(PyObject *self, PyObject *args){
     dict = dictionary_create_default_lang();
 
     if (!dict) {
-        PyErr_SetString(PyExc_RuntimeError, "Fatal error: Unable to open the dictionary");
-        Py_INCREF(Py_None);
-        return Py_None;
+    PyErr_SetString(PyExc_RuntimeError, "Fatal error: Unable to open the dictionary");
+    Py_INCREF(Py_None);
+    return Py_None;
     }
     
     sent = sentence_create(text, dict);
@@ -56,13 +58,21 @@ static PyObject *sentence(PyObject *self, PyObject *args){
     num_linkages = sentence_parse(sent, opts);
 
     if (num_linkages > 0) {
-            linkage = linkage_create(0, sent, opts);
-            /// Get the lengths of everythin
-            num_words = linkage_get_num_words(linkage);
-            sub_linkages = linkage_get_num_sublinkages(linkage);
-            links = linkage_get_num_links(linkage);
+    linkage = linkage_create(0, sent, opts);
+    /// Get the lengths of everything
+    num_words = linkage_get_num_words(linkage);
+    links = linkage_get_num_links(linkage);
 
-            for(link_idx=0; link_idx < links; link_idx++){
+    for(link_idx=0; link_idx < links; link_idx++){
+                PyObject *temp_subLen;
+
+                sub_linkage = linkage_create(link_idx, sent, opts);
+                sub_linkages = linkage_get_num_sublinkages(linkage);
+
+                temp_subLen = PyLong_FromLong(sub_linkages);
+                linkage_delete(sub_linkage);
+                PyList_Append(sublinkage_list, temp_subLen);
+
                 span = linkage_get_link_length(linkage, link_idx);
                 PyList_Append(span_list, PyInt_FromLong(span));
                 
@@ -72,6 +82,7 @@ static PyObject *sentence(PyObject *self, PyObject *args){
                 const char *t1 = linkage_get_link_llabel(linkage, link_idx);
                 temp = PyString_FromString(t1);
                 PyList_Append(temp_list, temp);
+
                 const char *t2 = linkage_get_link_rlabel(linkage, link_idx);
                 temp = PyString_FromString(t2);
                 PyList_Append(temp_list, temp);
@@ -108,7 +119,7 @@ static PyObject *sentence(PyObject *self, PyObject *args){
     dictionary_delete(dict);
     parse_options_delete(opts);
 
-    return Py_BuildValue("SSSS", word_list, span_list, output_list, word2_list);
+    return Py_BuildValue("SSSSS", word_list, span_list, output_list, word2_list, sublinkage_list);
 } 
 
 struct CNode_s {

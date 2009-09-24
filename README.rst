@@ -30,12 +30,15 @@ File Overview
 
 TO-DO
 =====
+- [/] Hypergraph data structure (atoms)
+- [/] Atom algorithms
+- [ ] Tree printer
+- [ ] First order logic prover integration
 - [ ] Word tense tagger
 - [ ] Emoticon tagger
 - [ ] Implement part of speech tagger
+- [ ] Spelling correction (pre-link grammar)
 - [ ] Hobbs anaphora [Hobbs1976]
-- [ ] Tree printer
-
 
 
 

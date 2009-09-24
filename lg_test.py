@@ -19,6 +19,7 @@ import linkGrammar
 from debug import *
 from structures.fsm import FSM
 from utils.list import list_functions
+from tree_utils import Print
 from semantic_rules import semantic_rules
 #from nltk.sem import logic
 from grammar_fsm import Semantics
@@ -67,6 +68,7 @@ class Grammar:
         ### and one for graphing
         self.G = nx.Graph()
         self.lists = list_functions()
+        self.tree_print = Print()
         
     def sentenceFSM(self, sentence):
         if sentence:
@@ -435,7 +437,7 @@ class irc_logParser:
 if __name__ == '__main__':
     logParser = irc_logParser()
     log_data = logParser.loadLogs('logs/2009-08-1*', limit=200)
-    
+    p = Print()
     for sentence in log_data:
         if not sentence:
             continue
@@ -444,11 +446,14 @@ if __name__ == '__main__':
         semantics = Semantics()
         v = linkGrammar.constituents(sentence)
         s = linkGrammar.sentence(sentence)
-        
+        if s:
+            p.print_sentence(s[0])
+            p.print_diagram(s)
+            
         grammar.sentence_to_Tree(s)
         #grammar.sentenceFSM(s)
         tree = grammar.const_toTree(v)
-
+        
         sem_output = semantics.handleSemantics(s)
         debug(sem_output)
         
