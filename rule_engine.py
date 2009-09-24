@@ -1,6 +1,9 @@
 from Plex import *
 from debug import *
 import re
+
+from semantic_rules import semantic_rules
+from grammar_fsm import ND_FSM
 ###  type l:tag(-|+) r:tag(-|+)
 ###  - = left of
 ###  + = right of
@@ -21,47 +24,6 @@ def test_rules(sentence):
     r = rule_engine()
     r.parse_text(sentence)
 
-def ADJ1(fsm):
-    pass
-def ADJ2(fsm):
-    pass
-
-def POS_VERB(fsm):
-    # <F_L POS> = verb
-    #fsm.memory.pos[fsm.counter] == 'verb'
-    debug(fsm.counter)
-    
-def POS_VERB_INVERTED(fsm):
-    # <F_L POS> = verb
-    #fsm.memory.pos[fsm.counter] == 'verb'
-    pass
-
-def POS_NOUN(fsm):
-    pass
-
-def DETERMINER_POS(fsm):
-    # <F_L POS> = det
-    string = re.compile('(a|A|an|An|the|The|This|this|These|these|Those|those|That|that)')
-    s_match = string.match(fsm.memory.words[fsm.counter])
-    if s_match:
-        fsm.registers['DETERMINER_LINK_FLAG'] = True
-        fsm.L_registers['DETERMINER_FLAG'] = True
-        return True
-    
-    else:
-        return False
-
-def DETERMINER_POS2(fsm):
-    current_word = fsm.memory.words[fsm.counter]
-    if current_word == 'the' or current_word == 'The':
-        fsm.registers['DETERMINER_LINK_FLAG'] = True
-        fsm.L_registers['DETERMINER_FLAG'] = True
-        return True
-
-def POS_NOUN_DET(fsm):
-    if fsm.registers.has_key('DETERMINER_LINK_FLAG'):
-        if fsm.registers['DETERMINER_LINK_FLAG']:
-            return True
 class SemTokenizer:
     def fsm_setup(self):
         self.fsm = ND_FSM('INIT')
@@ -85,34 +47,42 @@ class rule_engine:
     def __init__(self):
         self.rules = []
         self.rule_file = "rules.txt"
+        self.tokens = SemTokenizer()
         
-    def parse_text(self, text):
-        self.ndpda = NDPDA_FSM('INIT', text)
-        self.set_rules()
-        print self.ndpda.process_list(text.tags)
+    def semanticRules(self):
+        for k, v in semantic_rules.items():
+            if 'regex' in v:
+                for x in v['regex']:
+                    yield k, x
+                    
+    def parse_text(self, sentence):
+        if not sentence:
+            return
+
+        self.ndpda = NDPDA_FSM('INIT', sentence)
         
-    def parse_rules(self):
-        pass
+        self.tokens.fsm_setup()
+        
+        for k, x in self.semanticRules():
+            match_rules = {}
+            set_rules   = {}
+            
+            if x[:2] == '= ':
+                current_rule = semantic_rules[k]
+                for m in current_rule['match']:
+                    tokenizer_out = self.tokens.fsm_tokenizer(m)
+                    match_rules[k] = tokenizer_out
+                for n in current_rule['set']:
+                    tokenizer_out = self.tokens.fsm_tokenizer(n)
+                    set_rules[k] = tokenizer_out
+                    
+                self.ndpda.add_transition(x[2:], match_rules, name=k, next_state=set_rules)
+
+        
+        processed = self.ndpda.process_list(sentence.tags)
+        
+        return processed
     
-    def set_rules(self):
-        self.ndpda.add_transition('(A.*|DT.*)',        'INIT',  action=ADJ1)
-        self.ndpda.add_transition('(Mp.*|MVp.*|Ma\.*)', 'INIT', action=ADJ2)
-
-        pos_verb_ = '(S.*|SF.*|SX.*|I.*|B.*|BW.*|P.*|PP.*|Mv.*|Mg.*)'
-        self.ndpda.add_transition(pos_verb_, 'INIT', action=POS_VERB)
-
-        pos_verb_inverted_ = '(SI.*|O.*|U.*|PP.*|SXI.*|SFI.*)'
-        self.ndpda.add_transition(pos_verb_inverted_, 'INIT', action=POS_VERB_INVERTED)
-
-        pos_noun_ = '(S.*|SX.*|SF.*|AN.*|GN.*|YS.* |YP.*)'
-        self.ndpda.add_transition(pos_noun_, 'INIT', action=POS_NOUN)
-
-        determiner_pos_ = '(D.*|DD.*|NS.*)'
-        self.ndpda.add_transition(determiner_pos_, 'INIT', action=DETERMINER_POS)
-        self.ndpda.add_transition('(DG.*)', 'INIT', action=DETERMINER_POS2)
-        
-        self.ndpda.add_transition('.*', 'INIT', action=POS_NOUN_DET)
-        
 class NDPDA_FSM:
     def __init__(self, initial_state, memory=[]):
         self.state_transitions = {}
@@ -128,7 +98,7 @@ class NDPDA_FSM:
         self.R_registers = {}
         self.registers = {}
         self.counter = 0
-        
+        self.words  = {}
         
         
     def reset (self):
@@ -138,10 +108,94 @@ class NDPDA_FSM:
     def set_register_state(self, in_state):
         #debug(in_state)
         pass
+
+    def _words_before_and_after(self, sentence, word):
+        if word in sentence:
+            idx = sentence.index(word)
+            before = sentence[:idx]
+            after = sentence[idx+1:]
+            return (before, after)
+        else:
+            print '%s not in %s' % (word, sentence)
+            return False
+        
+    def _resolve_word(self, parsed):
+        for x in parsed:
+            if x[0] == 'front_left':
+                return self.memory.tag_set[self.counter].left
+            if x[0] == 'front_right':
+                return self.memory.tag_set[self.counter].right
+            
+    def _variable_list(self, parsed):
+        #self._words_before_and_after(parsed)
+        variables = []
+        for y in parsed:
+            if y[0] == 'ne' or y[0] == 'ap' or y[0] == 'eq':
+                break
+            if (y[1] != '<F_L') and (y[1] != '<F_R'):
+                if '>' in y[1]:
+                    variables.append(y[1][:-1])
+                    break
+                else:
+                    variables.append(y[1])
+                    
+        return variables
     
+    def _resolve_action(self, parsed):
+        idx = 0
+        for x in parsed:
+            if 'ne' == x[0]:
+                return (idx, 'ne')
+            if 'ap' == x[0]:
+                return (idx, 'ap')
+            if 'eq' == x[0]:
+                return (idx, 'eq')
+            idx += 1
+            
+    def _match_str(self, match_rule):
+        current_word = self.memory.words[self.counter]
+        c_regex = re.compile(match_rule[0][1])
+        c_match = c_regex.match(current_word)
+        if c_match:
+            return True
+        else:
+            return False
+        
+    def _has_word(self, word):
+        if self.words.has_key(word):
+            return True
+        else:
+            self.words[word] = {}
+            
     def match_register_state(self, in_state):
-        #debug(in_state)
-        pass
+        if len(in_state.items()) < 1:
+            return
+        head = in_state.keys()[0]
+        
+        state = in_state[head]
+        
+        debug(state)
+        variables = self._variable_list(state)
+        reference = self._resolve_word(state)
+        idx, action = self._resolve_action(state)
+
+        if action == 'eq':
+            for y in variables:
+                if y == 'str':
+                    return self._match_str(state[idx+1:])
+
+                else:
+                    self._has_word(reference)
+                    if self.words[reference].has_key(y):
+                        #self.words[reference][y]
+                        pass
+                    else:
+                        if state[idx+1:][0][0] == 'percent':
+                            return True
+                        else:
+                            return False
+                    
+        #pass
 
     
     def add_transition(self, input_symbol, state, next_state=None, name=None, action=None):
@@ -163,7 +217,11 @@ class NDPDA_FSM:
         self.input_symbol = input_symbol
         for transitions in self.get_transition(self.input_symbol):
             self.state, self.action, self.next_state, self.name = transitions
-
+            debug(self.state)
+            if self.match_register_state(self.state):
+                debug('were getting somewhere')
+                self.set_register_state(self.next_state)
+                
             if self.action is not None:
                 if self.action(self):
                     break
