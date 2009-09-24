@@ -42,7 +42,8 @@ class SemTokenizer:
     def fsm_tokenizer(self, obj):
         split_space = obj.split(' ')
         return self.fsm.process_list(split_space)
-    
+        
+        
 class rule_engine:
     def __init__(self):
         self.rules = []
@@ -83,6 +84,50 @@ class rule_engine:
         
         return processed
     
+class feature_path:
+    def build_path(self, string):
+        idx, action = self._resolve_action(string)
+        left, right = self._words_before_and_after(string, idx)
+        
+        
+    def _resolve_word(self, parsed):
+        for x in parsed:
+            if x[0] == 'front_left':
+                return self.memory.tag_set[self.counter].left
+            if x[0] == 'front_right':
+                return self.memory.tag_set[self.counter].right
+            
+    def _resolve_action(self, parsed):
+        idx = 0
+        for x in parsed:
+            if 'ne' == x[0]:
+                return (idx, 'ne')
+            if 'ap' == x[0]:
+                return (idx, 'ap')
+            if 'eq' == x[0]:
+                return (idx, 'eq')
+            idx += 1
+            
+    def _words_before_and_after(self, sentence, idx):
+        before = sentence[:idx]
+        after = sentence[idx+1:]
+        return (before, after)
+        
+
+    def _variable_list(self, parsed):
+        variables = []
+        for y in parsed:
+            if y[0] == 'ne' or y[0] == 'ap' or y[0] == 'eq':
+                break
+            if (y[1] != '<F_L') and (y[1] != '<F_R'):
+                if '>' in y[1]:
+                    variables.append(y[1][:-1])
+                    break
+                else:
+                    variables.append(y[1])
+                    
+        return variables
+            
 class NDPDA_FSM:
     def __init__(self, initial_state, memory=[]):
         self.state_transitions = {}
@@ -94,8 +139,6 @@ class NDPDA_FSM:
         self.action = None
         self.memory = memory
         self.output = []
-        self.L_registers = {}
-        self.R_registers = {}
         self.registers = {}
         self.counter = 0
         self.words  = {}
@@ -105,9 +148,7 @@ class NDPDA_FSM:
         self.current_state = self.initial_state
         self.input_symbol = None
         
-    def set_register_state(self, in_state):
-        #debug(in_state)
-        pass
+    
 
     def _words_before_and_after(self, sentence, word):
         if word in sentence:
@@ -167,9 +208,29 @@ class NDPDA_FSM:
         else:
             self.words[word] = {}
             
+    def r_getattr(self, object, attr):
+        return reduce(getattr, attr, object)
+
+    def r_setattr(self, object, attr, value):
+        return setattr(reduce(getattr, attrs[:-1], object), attrs[-1], value)
+
+    def dict_set(self, object, dictlist, value):
+        for x in dictlist:
+            if object.has_key(x):
+                pass
+            else:
+                if len(dictlist) > 1:
+                    object[x] = {}
+                else:
+                    object[x] = value
+                    
+            dictlist.pop(0)
+            self.dict_set(object[x], dictlist, value)
+    
     def match_register_state(self, in_state):
         if len(in_state.items()) < 1:
             return
+        
         head = in_state.keys()[0]
         
         state = in_state[head]
@@ -197,6 +258,23 @@ class NDPDA_FSM:
                     
         #pass
 
+    def set_register_state(self, in_state):
+        head = in_state.keys()[0]
+        state = in_state[head]
+        debug(state)
+        variables = self._variable_list(state)
+        reference = self._resolve_word(state)
+        #print self.r_getattr(self.words[reference], variables)
+        idx, action = self._resolve_action(state)
+        if action == 'eq':
+            self.dict_set(self.words[reference], variables, state[idx+1:][1])
+            
+        debug(self.words)
+        debug(variables)
+        if 'ref' in variables:
+            position = variables.index('ref')
+            right_of = variables[position+1:]
+    
     
     def add_transition(self, input_symbol, state, next_state=None, name=None, action=None):
         if next_state is None:
@@ -217,7 +295,6 @@ class NDPDA_FSM:
         self.input_symbol = input_symbol
         for transitions in self.get_transition(self.input_symbol):
             self.state, self.action, self.next_state, self.name = transitions
-            debug(self.state)
             if self.match_register_state(self.state):
                 debug('were getting somewhere')
                 self.set_register_state(self.next_state)
