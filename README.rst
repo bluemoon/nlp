@@ -34,13 +34,15 @@ TO-DO
 - [x] Atom algorithms
 - [/] Tree printer
 - [x] Generic sentence container
-- [ ] Rule engine
--  -- [ ] "Feature paths"
+- [/] Rule engine
+-  -- [x] "Feature paths"
+- [ ] Rule engine output analyzer
 - [ ] Implement part of speech tagger
 - [ ] Word tense tagger
 - [ ] Emoticon tagger
+- [ ] Frame analysis
+- -- [ ] Rete algorithm
 - [ ] First order logic prover integration
-
 - [ ] Spelling correction (pre-link grammar)
 - [ ] Hobbs anaphora [Hobbs1976]
 

@@ -2,9 +2,9 @@ from structures.atoms import Atoms
 import math
 
 class linkgrammar_tree:
-    #def load_into_atoms(self):
-    #    pass
-    pass
+    def load_into_atoms(self):
+        pass
+    
 
 class Print:
     def _has(self, has, sentence):

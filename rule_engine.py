@@ -1,6 +1,7 @@
 from Plex import *
 from debug import *
 import re
+import pprint
 
 from semantic_rules import semantic_rules
 from grammar_fsm import ND_FSM
@@ -24,31 +25,10 @@ def test_rules(sentence):
     r = rule_engine()
     r.parse_text(sentence)
 
-class SemTokenizer:
-    def fsm_setup(self):
-        self.fsm = ND_FSM('INIT')
-        ## setup our regex finite state machine
-        self.fsm.add_transition('<F_L$',  'INIT',  'front_left',        'INIT')
-        self.fsm.add_transition('<F_R$',  'INIT',  'front_right',       'INIT')
-        self.fsm.add_transition('<F_L>',  'INIT',  'front_left_close',  'INIT')
-        self.fsm.add_transition('<F_R>',  'INIT',  'front_right_close', 'INIT')
-        
-        self.fsm.add_transition('([a-zA-Z_-]|[$])+' , 'INIT', 'tag', 'INIT')
-        self.fsm.add_transition('!=',         'INIT', 'ne',         'INIT')
-        self.fsm.add_transition('=',          'INIT', 'eq',         'INIT')
-        self.fsm.add_transition('\+=',        'INIT', 'ap',         'INIT')
-        self.fsm.add_transition('%',          'INIT', 'percent',   'INIT')
-        
-    def fsm_tokenizer(self, obj):
-        split_space = obj.split(' ')
-        return self.fsm.process_list(split_space)
-        
-        
 class rule_engine:
     def __init__(self):
         self.rules = []
-        self.rule_file = "rules.txt"
-        self.tokens = SemTokenizer()
+        self.feature_path = feature_path()
         
     def semanticRules(self):
         for k, v in semantic_rules.items():
@@ -56,80 +36,252 @@ class rule_engine:
                 for x in v['regex']:
                     yield k, x
                     
-    def parse_text(self, sentence):
-        if not sentence:
-            return
-
-        self.ndpda = NDPDA_FSM('INIT', sentence)
-        
-        self.tokens.fsm_setup()
-        
+    def setup_rules(self):
         for k, x in self.semanticRules():
             match_rules = {}
             set_rules   = {}
             
             if x[:2] == '= ':
+                ## Also "\." is replaced with "[a-z\*]"
                 current_rule = semantic_rules[k]
                 for m in current_rule['match']:
-                    tokenizer_out = self.tokens.fsm_tokenizer(m)
-                    match_rules[k] = tokenizer_out
+                    if not match_rules.has_key(k):
+                        match_rules[k] = []
+                        
+                    match_rules[k].append(self.feature_path.build_path(m))
+                    
                 for n in current_rule['set']:
-                    tokenizer_out = self.tokens.fsm_tokenizer(n)
-                    set_rules[k] = tokenizer_out
+                    if not set_rules.has_key(k):
+                        set_rules[k] = []
+                        
+                    set_rules[k].append(self.feature_path.build_path(n))
                     
                 self.ndpda.add_transition(x[2:], match_rules, name=k, next_state=set_rules)
 
-        
+    def parse_text(self, sentence):
+        if not sentence:
+            return
+
+        self.ndpda = NDPDA_FSM('INIT', sentence)
+        self.setup_rules()
         processed = self.ndpda.process_list(sentence.tags)
+        #self.tokens.fsm_setup()
+
+        pprint.pprint(processed)
         
         return processed
-    
+
+
 class feature_path:
+    def __init__(self, fsm=None):
+        if fsm:
+            self.fsm = fsm
+    
+    literals = [
+        '%',   ## signifies null
+        'str', ## is the literal for the current string
+    ]
+    
+    ## a feature path is made up of
+    ## left side, action, right side
     def build_path(self, string):
-        idx, action = self._resolve_action(string)
-        left, right = self._words_before_and_after(string, idx)
+        idx, action = self.resolve_action(string)
+        left, right = self.words_before_and_after(string, idx)
+        ## now match the <...>
+        left_m = self.match_to_path(left)
+        right_m = self.match_to_path(right)
         
+        return (left_m, action, right_m)
         
-    def _resolve_word(self, parsed):
-        for x in parsed:
-            if x[0] == 'front_left':
-                return self.memory.tag_set[self.counter].left
-            if x[0] == 'front_right':
-                return self.memory.tag_set[self.counter].right
+    def match_to_path(self, to_match):
+        if '<' in to_match:
+            ## it may not be the first character
+            L_idx = to_match.index('<')
+            if '>' in to_match:
+                R_idx = to_match.index('>')
+                substring = to_match[L_idx+1:R_idx]
+                return substring.split(' ')
+            else:
+                ## it should really have a matching bracket
+                ## but dump the whole thing anyway to play
+                ## it safe
+                if to_match[0] == ' ':
+                    return [to_match[1:]]
+                else:
+                    return [to_match]
+        else:
+            ## it doesnt like to pick up that first space
+            if to_match[0] == ' ':
+                return [to_match[1:]]
+            else:
+                return [to_match]
+
+    def dict_set(self, object, dictlist, value, action):
+        for x in dictlist:
+            if object.has_key(x):
+                pass
+            else:
+                if len(dictlist) > 1:
+                    object[x] = {}
+                else:
+                    if action == 'eq':
+                        if value == ['%']:
+                            try:
+                                del object[x]
+                            except KeyError:
+                                pass
+                        else:
+                            object[x] = value
+                    elif action == 'ap':
+                        if isinstance(object[x], list):
+                            object[x].append(value)
+                        else:
+                            object[x] = []
+                            object[x].append(value)
+                    
+            dictlist.pop(0)
+            if isinstance(object, dict):
+                if not object.has_key(x):
+                    object[x] = {}
+                self.dict_set(object[x], dictlist, value, action)
+
+    def _has(self, has, sentence):
+        if has in sentence:
+            has = sentence.index(has)
+            return (True, has)
+        else:
+            return (False, 0)
+        
+    def resolve_words(self, s_tuple, memory):
+        LEFT_TAG  = 'F_L'
+        RIGHT_TAG = 'F_R'
+
+        fsm_memory = self.fsm.memory
+        left_wall  = self._has('LEFT-WALL',  fsm_memory.words)
+        ## start the indexer at 0 if we dont have the left wall
+        ## or with 1 if we do, overloaded logic because of no
+        ## ternary operator
+        i = (left_wall[0] != True and 0 or 1)
+        if self.fsm.counter == 0:
+            current_span = fsm_memory.spans[self.fsm.counter]
+            current_word = fsm_memory.words[self.fsm.counter]
+        else:
+            current_span = fsm_memory.spans[self.fsm.counter-i]
+            current_word = fsm_memory.words[self.fsm.counter-i]
             
-    def _resolve_action(self, parsed):
-        idx = 0
-        for x in parsed:
-            if 'ne' == x[0]:
+        word_set_len = len(fsm_memory.words)
+        if word_set_len > (self.fsm.counter + current_span):
+            right_word = fsm_memory.words[self.fsm.counter-i + current_span]
+        else:
+            ## the right word is probably buried in a wall or
+            ## actually i have no idea
+            right_word = fsm_memory.words[-1]
+
+        
+        left_side = s_tuple[0]
+        right_side = s_tuple[2]
+        
+        ## handle left side
+        if LEFT_TAG in left_side:
+            idx = left_side.index(LEFT_TAG)
+            left_side[idx] = current_word
+        if RIGHT_TAG in left_side:
+            idx = left_side.index(RIGHT_TAG)
+            left_side[idx] = right_word
+            
+        ## handle the right side
+        if LEFT_TAG in right_side:
+            idx = right_side.index(LEFT_TAG)
+            right_side[idx] = current_word
+        if RIGHT_TAG in right_side:
+            idx = right_side.index(RIGHT_TAG)
+            right_side[idx] = right_word
+            
+        
+
+    def resolve_action(self, parsed):
+        for idx, x in enumerate(parsed):
+            if '!=' == x:
                 return (idx, 'ne')
-            if 'ap' == x[0]:
+            if '+=' == x:
                 return (idx, 'ap')
-            if 'eq' == x[0]:
+            if '=' == x:
                 return (idx, 'eq')
-            idx += 1
+
             
-    def _words_before_and_after(self, sentence, idx):
+    def words_before_and_after(self, sentence, idx):
         before = sentence[:idx]
         after = sentence[idx+1:]
         return (before, after)
-        
-
-    def _variable_list(self, parsed):
-        variables = []
-        for y in parsed:
-            if y[0] == 'ne' or y[0] == 'ap' or y[0] == 'eq':
-                break
-            if (y[1] != '<F_L') and (y[1] != '<F_R'):
-                if '>' in y[1]:
-                    variables.append(y[1][:-1])
-                    break
+    
+    def match_action(self, s_tuple, memory):
+        self.resolve_words(s_tuple, memory)
+        if s_tuple[1] == 'eq':
+            ## probing the dictionary wildly
+            ## good idea to catch non-existant items
+            try:
+                entry = reduce(getattr, s_tuple[0], object)
+                debug(entry)
+                if entry == s_tuple[2]:
+                    return True
                 else:
-                    variables.append(y[1])
+                    if s_tuple[2] == ['%']:
+                        return True
+                    else:
+                        return False
                     
-        return variables
+            except Exception, E:
+                if s_tuple[2] == ['%']:
+                    return True
+                else:
+                    return False
+        
+        if s_tuple[1] == 'ne':
+            ## probing the dictionary wildly
+            ## good idea to catch non-existant items
+            try:
+                entry = reduce(getattr, s_tuple[0], object)
+                debug(entry)
+                if entry == s_tuple[2]:
+                    return False
+                else:
+                    if s_tuple[2] == ['%']:
+                        return False
+                    else:
+                        return True
+                    
+            except Exception, E:
+                if s_tuple[2] == ['%']:
+                    return True
+                else:
+                    return False       
+
             
+    
+    def do_action(self, s_tuple, memory):
+        ## memory has to be a dictionary
+        self.resolve_words(s_tuple, memory)
+
+        if s_tuple[1] == 'eq':
+            self.doActionEqual(s_tuple, memory)
+        if s_tuple[1] == 'ap':
+            self.doActionAppend(s_tuple, memory)
+            
+    def doActionEqual(self, s_tuple, memory):
+        left = s_tuple[0]
+        right = s_tuple[2]
+        self.dict_set(memory, left, right, 'eq')
+        #debug(memory)
+        
+    def doActionAppend(self, s_tuple, memory):
+        left = s_tuple[0]
+        right = s_tuple[2]
+        self.dict_set(memory, left, right, 'ap')
+        #debug(memory)
+        
 class NDPDA_FSM:
     def __init__(self, initial_state, memory=[]):
+        self.feature_path = feature_path(fsm=self)
         self.state_transitions = {}
 
         self.input_symbol = None
@@ -141,7 +293,9 @@ class NDPDA_FSM:
         self.output = []
         self.registers = {}
         self.counter = 0
-        self.words  = {}
+        self.words = {}
+        self.frame_memory = {}
+        self.frames = []
         
         
     def reset (self):
@@ -149,132 +303,43 @@ class NDPDA_FSM:
         self.input_symbol = None
         
     
-
-    def _words_before_and_after(self, sentence, word):
-        if word in sentence:
-            idx = sentence.index(word)
-            before = sentence[:idx]
-            after = sentence[idx+1:]
-            return (before, after)
-        else:
-            print '%s not in %s' % (word, sentence)
-            return False
-        
-    def _resolve_word(self, parsed):
-        for x in parsed:
-            if x[0] == 'front_left':
-                return self.memory.tag_set[self.counter].left
-            if x[0] == 'front_right':
-                return self.memory.tag_set[self.counter].right
-            
-    def _variable_list(self, parsed):
-        #self._words_before_and_after(parsed)
-        variables = []
-        for y in parsed:
-            if y[0] == 'ne' or y[0] == 'ap' or y[0] == 'eq':
-                break
-            if (y[1] != '<F_L') and (y[1] != '<F_R'):
-                if '>' in y[1]:
-                    variables.append(y[1][:-1])
-                    break
-                else:
-                    variables.append(y[1])
-                    
-        return variables
-    
-    def _resolve_action(self, parsed):
-        idx = 0
-        for x in parsed:
-            if 'ne' == x[0]:
-                return (idx, 'ne')
-            if 'ap' == x[0]:
-                return (idx, 'ap')
-            if 'eq' == x[0]:
-                return (idx, 'eq')
-            idx += 1
-            
-    def _match_str(self, match_rule):
-        current_word = self.memory.words[self.counter]
-        c_regex = re.compile(match_rule[0][1])
-        c_match = c_regex.match(current_word)
-        if c_match:
-            return True
-        else:
-            return False
-        
-    def _has_word(self, word):
-        if self.words.has_key(word):
-            return True
-        else:
-            self.words[word] = {}
-            
-    def r_getattr(self, object, attr):
-        return reduce(getattr, attr, object)
-
-    def r_setattr(self, object, attr, value):
-        return setattr(reduce(getattr, attrs[:-1], object), attrs[-1], value)
-
-    def dict_set(self, object, dictlist, value):
-        for x in dictlist:
-            if object.has_key(x):
-                pass
-            else:
-                if len(dictlist) > 1:
-                    object[x] = {}
-                else:
-                    object[x] = value
-                    
-            dictlist.pop(0)
-            self.dict_set(object[x], dictlist, value)
-    
     def match_register_state(self, in_state):
         if len(in_state.items()) < 1:
-            return
+            return True
         
-        head = in_state.keys()[0]
-        
+        head = in_state.keys()[0] 
         state = in_state[head]
-        
-        debug(state)
-        variables = self._variable_list(state)
-        reference = self._resolve_word(state)
-        idx, action = self._resolve_action(state)
-
-        if action == 'eq':
-            for y in variables:
-                if y == 'str':
-                    return self._match_str(state[idx+1:])
-
-                else:
-                    self._has_word(reference)
-                    if self.words[reference].has_key(y):
-                        #self.words[reference][y]
-                        pass
-                    else:
-                        if state[idx+1:][0][0] == 'percent':
-                            return True
-                        else:
-                            return False
-                    
-        #pass
-
-    def set_register_state(self, in_state):
-        head = in_state.keys()[0]
-        state = in_state[head]
-        debug(state)
-        variables = self._variable_list(state)
-        reference = self._resolve_word(state)
-        #print self.r_getattr(self.words[reference], variables)
-        idx, action = self._resolve_action(state)
-        if action == 'eq':
-            self.dict_set(self.words[reference], variables, state[idx+1:][1])
+        output = None
+        match_value = None
             
-        debug(self.words)
-        debug(variables)
-        if 'ref' in variables:
-            position = variables.index('ref')
-            right_of = variables[position+1:]
-    
+        for cur_state in state:
+            if 'str' in cur_state[0]:
+                self.resolve_words(cur_state, self.words)
+                words_to_match = cur_state[2][0].split('|')
+                debug(words_to_match)
+                if cur_state[0] in words_to_match:
+                    return True
+            
+            match = self.feature_path.match_action(cur_state, self.words)
+            if not match_value:
+                match_value = match
+            else:
+                if match_value:
+                    match_value = match
+                    
+                    
+        return match_value
+                    
+                
+    def set_register_state(self, in_state):
+        if len(in_state.items()) < 1:
+            return
+
+        head = in_state.keys()[0]
+        state = in_state[head]
+        #debug(state)
+        for cur_state in state:
+            self.feature_path.do_action(cur_state, self.words)
     
     def add_transition(self, input_symbol, state, next_state=None, name=None, action=None):
         if next_state is None:
@@ -284,7 +349,17 @@ class NDPDA_FSM:
         
     def get_transition(self, input_symbol):
         for regex_transitions in self.state_transitions:
-            re_to_match = re.compile(regex_transitions)
+            regex = regex_transitions
+            regex.replace('\.', '[a-z]')
+            if regex[0] == ' ':
+                regex = regex[1:]
+                
+            if regex[0] != '(':
+                to_compile = '(%s)' % regex
+            else:
+                to_compile = regex
+                
+            re_to_match = re.compile(to_compile)
             re_search = re_to_match.match(input_symbol)
             if re_search:
                 yield self.state_transitions[regex_transitions]
@@ -296,16 +371,14 @@ class NDPDA_FSM:
         for transitions in self.get_transition(self.input_symbol):
             self.state, self.action, self.next_state, self.name = transitions
             if self.match_register_state(self.state):
-                debug('were getting somewhere')
                 self.set_register_state(self.next_state)
-                
-            if self.action is not None:
-                if self.action(self):
-                    break
+                break
+            
 
             #output = {self.name:{'set_state':self.next_state}}
 
-            
+        self.frames.append((self.counter, self.frame_memory))
+        self.frame_memory = {}
         self.current_state = self.next_state
         self.next_state = None
         self.counter += 1
@@ -325,7 +398,7 @@ class NDPDA_FSM:
                 
             current_item += 1
             
-        return output
+        return self.words
 
 
 

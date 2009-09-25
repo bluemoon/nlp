@@ -13,7 +13,9 @@ def main():
     
     logParser = irc_logParser()
 
-    log_data = logParser.loadLogs('logs/2009-08-1*', limit=200)
+    #log_data = logParser.loadLogs('logs/2009-08-1*', limit=200)
+    log_data = ['Alice looked at the cover of Shonen Jump.', 'She decided to buy it.']
+    
     for sentences in log_data:
         rule_eng  = rule_engine()
         if not sentences:
