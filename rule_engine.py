@@ -314,7 +314,7 @@ class NDPDA_FSM:
             
         for cur_state in state:
             if 'str' in cur_state[0]:
-                self.resolve_words(cur_state, self.words)
+                self.feature_path.resolve_words(cur_state, self.words)
                 words_to_match = cur_state[2][0].split('|')
                 debug(words_to_match)
                 if cur_state[0] in words_to_match:

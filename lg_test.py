@@ -21,7 +21,7 @@ from structures.fsm import FSM
 from utils.list import list_functions
 from tree_utils import Print
 from semantic_rules import semantic_rules
-from sentence import sentence
+from containers import sentence
 
 #from nltk.sem import logic
 from grammar_fsm import Semantics

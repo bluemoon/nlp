@@ -28,6 +28,9 @@ def debug(obj, prefix=None):
         caller_method = caller_module
         function = False
 
+    if '/' in caller_module:
+        caller_module = caller_module.split('/')[-1]
+            
     #f_prefix = function == True and 'function' or 'module'
     f_formatting =  '%s--> [m:%s f:%s]%s'
     if len(DEBUG_CALL_LIST) >= 1:

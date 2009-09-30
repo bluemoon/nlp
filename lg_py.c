@@ -1,6 +1,127 @@
 #include "Python.h"
 #include <locale.h>
 #include "link-includes.h"
+/*
+typedef struct {
+    PyObject_HEAD
+    PyObject *word_list;
+    PyObject *span_list;
+    PyObject *links_list;
+    PyObject *tag_list;
+    PyObject *tag_pair_list;
+    
+    
+    
+} Sentence;
+
+static PyTypeObject linkgrammar_SentenceType = {
+    PyObject_HEAD_INIT(NULL)
+    0,                         
+    "linkgrammar.Sentence",    
+    sizeof(Sentence),          
+    0,                         
+    0,                         
+    0,                         
+    0,                         
+    0,                         
+    0,                         
+    0,                         
+    0,                         
+    0,                         
+    0,                         
+    0,                         
+    0,                         
+    0,                         
+    0,                         
+    0,                         
+    0,                         
+    Py_TPFLAGS_DEFAULT,        
+    "linkgrammar objects",     
+};
+static void Sentence_dealloc(Noddy* self){
+    Py_XDECREF(self->word_list);
+    Py_XDECREF(self->span_list);
+    Py_XDECREF(self->links_list);
+    Py_XDECREF(self->tag_list);
+    Py_XDECREF(self->tag_pair_list);
+
+    self->ob_type->tp_free((PyObject*)self);
+}
+
+static PyObject *Sentence_new(PyTypeObject *type, PyObject *args, PyObject *kwds){
+    Sentence *self;
+
+    self = (Sentence *)type->tp_alloc(type, 0);
+    if (self != NULL) {
+        self->word_list = PyList_New(0);
+        if (self->word_list == NULL){
+            Py_DECREF(self);
+            return NULL;
+        }
+        
+        self->span_list = PyList_New(0);
+        if (self->span_list == NULL){
+            Py_DECREF(self);
+            return NULL;
+        }
+
+        self->links_list = PyList_New(0);
+        if (self->links_list == NULL){
+            Py_DECREF(self);
+            return NULL;
+        }
+        self->tag_list = PyList_New(0);
+        if (self->tag_list == NULL){
+            Py_DECREF(self);
+            return NULL;
+        }
+        self->tag_pair_list = PyList_New(0);
+        if (self->tag_pair_list == NULL){
+            Py_DECREF(self);
+            return NULL;
+        }
+
+        self->number = 0;
+    }
+
+    return (PyObject *)self;
+}
+
+
+static int Sentence_init(Sentence *self, PyObject *args, PyObject *kwds){
+    PyObject *word_list = NULL;
+    PyObject *span_list = NULL;
+    PyObject *links_list = NULL;
+    PyObject *tag_list = NULL;
+    PyObject *tag_pair_list = NULL;
+    
+    static char *kwlist[] = {"word_list", "span_list",
+     "links_list", "tag_list", "tag_pair_list", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|OOOOO", kwlist, 
+                                      &first, &last, 
+                                      &self->number))
+        return -1; 
+
+    if (first) {
+        tmp = self->first;
+        Py_INCREF(first);
+        self->first = first;
+        Py_XDECREF(tmp);
+    }
+
+    if (last) {
+        tmp = self->last;
+        Py_INCREF(last);
+        self->last = last;
+        Py_XDECREF(tmp);
+    }
+
+    return 0;
+}
+
+*/
+
 
 /// This is the basic sentence dissection
 static PyObject *sentence(PyObject *self, PyObject *args){
@@ -9,6 +130,7 @@ static PyObject *sentence(PyObject *self, PyObject *args){
     Sentence      sent;
     Linkage       linkage;
     Linkage       sub_linkage;
+    char *        diagram;
 
     /// Link counts
     int   num_linkages;
@@ -30,6 +152,7 @@ static PyObject *sentence(PyObject *self, PyObject *args){
     PyObject *span_list;
     PyObject *temp;
     PyObject *sublinkage_list;
+    PyObject *_diagram;
 
     output_list = PyList_New(0);
     word_list   = PyList_New(0);
@@ -39,18 +162,19 @@ static PyObject *sentence(PyObject *self, PyObject *args){
     span_list = PyList_New(0);
 
     if (!PyArg_ParseTuple(args, "s", &text))
-    return NULL;
+        return NULL;
 
     opts = parse_options_create();
     parse_options_set_verbosity(opts, -1);
+    parse_options_set_screen_width(opts, 50);
 
     setlocale(LC_ALL, "");
     dict = dictionary_create_default_lang();
 
     if (!dict) {
-    PyErr_SetString(PyExc_RuntimeError, "Fatal error: Unable to open the dictionary");
-    Py_INCREF(Py_None);
-    return Py_None;
+        PyErr_SetString(PyExc_RuntimeError, "Fatal error: Unable to open the dictionary");
+        Py_INCREF(Py_None);
+        return Py_None;
     }
     
     sent = sentence_create(text, dict);
@@ -58,13 +182,16 @@ static PyObject *sentence(PyObject *self, PyObject *args){
     num_linkages = sentence_parse(sent, opts);
 
     if (num_linkages > 0) {
-    linkage = linkage_create(0, sent, opts);
-    /// Get the lengths of everything
-    num_words = linkage_get_num_words(linkage);
-    links = linkage_get_num_links(linkage);
+        linkage = linkage_create(0, sent, opts);
+        /// Get the lengths of everything
+        num_words = linkage_get_num_words(linkage);
+        links = linkage_get_num_links(linkage);
 
-    for(link_idx=0; link_idx < links; link_idx++){
+        for(link_idx=0; link_idx < links; link_idx++){
                 PyObject *temp_subLen;
+
+                diagram = linkage_print_diagram(linkage);
+                _diagram = PyString_FromString(diagram);
 
                 sub_linkage = linkage_create(link_idx, sent, opts);
                 sub_linkages = linkage_get_num_sublinkages(linkage);
@@ -104,6 +231,7 @@ static PyObject *sentence(PyObject *self, PyObject *args){
                 PyList_Append(word_list, word);
             }
 
+            linkage_free_diagram(diagram);
             linkage_delete(linkage);
 
      } else{
@@ -119,7 +247,7 @@ static PyObject *sentence(PyObject *self, PyObject *args){
     dictionary_delete(dict);
     parse_options_delete(opts);
 
-    return Py_BuildValue("SSSSS", word_list, span_list, output_list, word2_list, sublinkage_list);
+    return Py_BuildValue("SSSSSS", word_list, span_list, output_list, word2_list, sublinkage_list, _diagram);
 } 
 
 struct CNode_s {
@@ -315,8 +443,14 @@ PyMethodDef methods[] = {
 };
 
 PyMODINIT_FUNC initlinkGrammar(void){
+    //PyObject* m;
+    //linkgrammar_SentenceType.tp_new = PyType_GenericNew;
+    //if (PyType_Ready(&linkgrammar_SentenceType) < 0)
+    //    return;
+
     (void) Py_InitModule("linkGrammar", methods);
 
-
+    //Py_INCREF(&linkgrammar_SentenceType);
+    //PyModule_AddObject(m, "Sentence", (PyObject *)&linkgrammar_SentenceType);
 
 }

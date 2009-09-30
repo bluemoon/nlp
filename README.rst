@@ -15,6 +15,10 @@ I have another non-deterministic finite state machine(read: regex finite state
 machine) to parse the rules that were taken from RelEx into something that is
 manageable.
 
+Pre-requisites
+==============
+- Python 2.5+
+- Link Grammar (newest)
 
 File Overview
 =============
@@ -32,12 +36,13 @@ TO-DO
 =====
 - [x] Hypergraph data structure (atoms)
 - [x] Atom algorithms
-- [/] Tree printer
+- [x] Tree printer
 - [x] Generic sentence container
 - [/] Rule engine
 -  -- [x] "Feature paths"
+- [ ] Support vector machine for analysis
 - [ ] Rule engine output analyzer
-- [ ] Implement part of speech tagger
+- [x] Implement part of speech tagger
 - [ ] Word tense tagger
 - [ ] Emoticon tagger
 - [ ] Frame analysis

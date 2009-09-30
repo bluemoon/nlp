@@ -9,7 +9,7 @@ from structures.fsm import FSM
 from structures.atoms import Atoms
 from utils.list import list_functions
 from semantic_rules import semantic_rules
-from sentence import tag as Tag
+from containers import tag as Tag
 from debug import *
 
 class SemTokenizer:
