@@ -36,7 +36,7 @@ class sentence:
         self.tagged_words = braubt_tagger.tag(normal_words)
         self.has_right_wall = ('RIGHT-WALL' in sentence[0] and False or True)
         self.has_left_wall  = ('LEFT-WALL'  in sentence[0] and False or True)
-
+        
 
 
     def __repr__(self):
